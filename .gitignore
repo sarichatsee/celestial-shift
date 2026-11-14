@@ -1,3 +1,9 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Raw API responses cached by tools/build_storms.py
+tools/cache/
+
+# macOS
+.DS_Store

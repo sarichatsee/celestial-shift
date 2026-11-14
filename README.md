@@ -1,8 +1,47 @@
-# Orbit 27 · Godot 4 controls prototype
+# Lunar Night Shift · Godot 4
 
-Unzip the project. In Godot 4 Project Manager, choose **Import**, select
-`project.godot`, and open it. Press **F5** to run. This is a separate 2D
-project you can use to demo the controls before integrating them.
+A game for kids aged 7 to 12, built for NASA Space Apps 2026 ("Build a Junior
+Astronaut Mission Trainer"). You keep a Moon base running for four levels of
+14 turns. Every turn you share one power budget between life support, the
+shield, science, charging the battery and the greenhouse. Real solar flares
+from NASA's DONKI database set off storm alerts: shelter, or stay and do
+science? The real record decides what happened, and the debrief shows the
+real dates.
+
+It grew out of the **Orbit 27 controls prototype** and keeps its look: the
+full-screen artwork, the two rooms (**Orbit** and **Greenhouse**, keys **1**
+and **2**), the top bar and the bottom bar. The rules, levels, storm data,
+debrief and Science page come from the browser build on the
+`lunar-night-shift` branch.
+
+Not made or endorsed by NASA. Uses public NASA data.
+
+## Run it
+
+In the Godot 4 Project Manager choose **Import**, select `project.godot`, open
+it and press **F5**. The canvas is 1280 × 720.
+
+Run the tests without opening the editor:
+
+```bash
+godot --headless --path . --script res://tests/run_tests.gd
+```
+
+The tests include the acceptance test: ten fixed strategies must finish with
+exactly the stars, radiation and shield that `tools/balance_sim.py` prints
+(HANDOVER.md section 9.2).
+
+## How a turn works
+
+- **Day (turns 1 to 7):** the sun gives 10 power. Power you don't spend is lost.
+- **Night (turns 8 to 14):** only the battery. Charge it by day.
+- **Life support:** 3 holds Air steady and runs the water recycler.
+- **Shield:** 8 power builds one layer. It lasts for the whole game.
+- **Science:** 1 power is 1 star. Stars are the score.
+- **Greenhouse (from Level 2):** grows 3 food; 1 power by day, 4 at night.
+- **Storm alert (Levels 3 and 4):** you see the flare class and a chance in
+  dots out of 10, never the outcome. Shelter costs 1 power and the turn's
+  science.
 
 ## Add your artwork
 
@@ -10,39 +49,48 @@ The project runs with labeled placeholders. Copy your PNGs into `assets/`:
 
 | File | When shown |
 | --- | --- |
-| `orbit.png` | Orbit view |
-| `greenhouse_plant0.png` | Greenhouse is empty or the crop is still growing |
-| `greenhouse_plant1.png` | Greenhouse crop is ready to harvest |
+| `orbit.png` | Orbit room, and behind the title, intro and debrief |
+| `greenhouse_plant0.png` | Greenhouse room, greenhouse switched off |
+| `greenhouse_plant1.png` | Greenhouse room, greenhouse switched on |
 
 You can also select the root node in `main.tscn` and assign the three
-textures in the Inspector. Inspector assignments take priority. The canvas
-is 1280 × 720 and the images fill it.
-
-## Show the team
-
-Switch between **Orbit** and **Greenhouse** with the tabs or **1** / **2**.
-Navigation is free. Each action advances nine days. The storm hits on the
-third action, at day 27.
-
-- **Get supplies.** In Orbit, click **Scan Sun** to record the flare
-  strength, then **Request supplies** to send the report to Earth. Take
-  your last action and start the next cycle to receive three food. A
-  report can only be sent once, and a new scan is available each cycle.
-- **Get fired.** Restart, then click **Request supplies** three times
-  without scanning. Each denial costs one point on the job standing bar.
-  At zero, the mission ends. A successful report restores one point up
-  to the maximum of three. You can also skip contacting Earth.
-- **See the storm trade-off.** In cycle one, plant a potato, scan the
-  Sun, then choose between sending the report for food or raising the
-  shields to save the crop. A strong storm destroys an unshielded crop.
-  A mild storm leaves it intact. The demo alternates strong and mild
-  storms, starting with strong.
-- **Show the greenhouse art.** Plant a radish, advance time to day 18,
-  and harvest it for two food. The art switches to state 1 once the crop
-  is harvestable.
+textures in the Inspector. Inspector assignments take priority. The images
+fill the 1280 × 720 canvas.
 
 ## Code map
 
-- `game_state.gd` owns the cycle, crops, storms, job standing, and supply deliveries.
-- `main.gd` connects buttons and updates the views and HUD.
-- `main.tscn` contains the editable UI and background.
+| File | What it is |
+| --- | --- |
+| `game_numbers.gd` | Every game number, each tagged `[TUNE]`. Change one only with the simulator. |
+| `game_text.gd` | Every word a player reads. Unchecked science facts are marked `TODO(verify)`. |
+| `storms_data.gd` | Saved NASA data. **Generated** by `tools/build_storms.py`; never edit by hand. |
+| `game_state.gd` | The rules. No nodes, no randomness. The only reader of whether a storm followed. |
+| `main.gd`, `main.tscn` | The screen: draws the state, reads clicks, calls the rules. |
+| `ui_kit.gd` | Colours and small builders, so the look lives in one place. |
+| `bar_chart.gd`, `dot_row.gd` | The debrief charts and the dots (storm chance, shield layers). |
+| `live_sun.gd` | "The Sun right now" on the title screen: live DONKI fetch with a saved fallback. |
+| `sound_fx.gd` | Beeps made in code (no sound files), with a mute button. |
+| `tests/run_tests.gd` | Unit tests, no-peeking tests and the simulator parity test. |
+| `tools/balance_sim.py` | The reference implementation of the rules. Don't change it without a human. |
+| `tools/build_storms.py` | Builds `storms_data.gd` from DONKI and RadLab (`--offline` uses the saved extract). |
+| `HANDOVER.md` | The design brief: rules, data, tests and facts still to verify. |
+
+## Rebuild the NASA data
+
+```bash
+python3 tools/build_storms.py --offline
+```
+
+```bash
+python3 tools/build_storms.py --years 2024
+```
+
+The first uses `tools/donki_alerts_2024.json` and needs no internet (no Moon
+radiation chart, no saved Sun snapshot). The second fetches DONKI and OSDR
+RadLab and caches the raw answers in `tools/cache/`.
+
+## Web build
+
+`export_presets.cfg` exports to `web-export/`. The files there, and the copy
+at the repo root, are still the Orbit 27 prototype: re-export from the Godot
+editor to publish this version.
