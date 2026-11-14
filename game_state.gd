@@ -20,6 +20,7 @@ var storm_resolved := false
 var job_standing := MAX_JOB_STANDING
 var report_status := ReportStatus.UNSCANNED
 var supplies_pending := false
+var nasa_flare_class := ""
 
 var crop_index := -1
 var crop_age := 0
@@ -31,12 +32,24 @@ func can_act() -> bool:
 
 
 func flare_is_strong() -> bool:
-	# Fixed sequence for the demo. The first storm is strong.
+	if nasa_flare_class != "":
+		var flare_type := nasa_flare_class.substr(0, 1).to_upper()
+		if flare_type == "X":
+			return true
+		if flare_type == "M":
+			return nasa_flare_class.substr(1).to_float() >= 5.0
+	# Offline fallback for the demo. The first storm is strong.
 	return cycle % 2 == 1
 
 
 func flare_strength() -> String:
+	if nasa_flare_class != "":
+		return "NASA %s" % nasa_flare_class
 	return "Strong" if flare_is_strong() else "Mild"
+
+
+func set_nasa_flare_class(flare_class: String) -> void:
+	nasa_flare_class = flare_class.strip_edges().to_upper()
 
 
 @warning_ignore("integer_division")
@@ -117,6 +130,7 @@ func start_next_cycle() -> void:
 	shielded = false
 	storm_resolved = false
 	report_status = ReportStatus.UNSCANNED
+	nasa_flare_class = ""
 	notice = "Cycle %02d has begun." % cycle
 	if supplies_pending:
 		food += FOOD_PER_DELIVERY
