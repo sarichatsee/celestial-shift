@@ -76,7 +76,7 @@ fill the 1280 × 720 canvas.
 | `moon_base_view.gd` | The picture of the Moon base, drawn from the meters and the plan. |
 | `bar_chart.gd`, `dot_row.gd` | The debrief charts and the dots (storm chance, shield layers). |
 | `live_sun.gd` | "The Sun right now" on the title screen: live DONKI fetch with a saved fallback. |
-| `sound_fx.gd` | Beeps made in code (no sound files), with a mute button. |
+| `sound_fx.gd` | Plays the files in `sound_effects/`, with a mute button. A missing file falls back to a beep made in code. |
 | `tests/run_tests.gd` | Unit tests, no-peeking tests and the simulator parity test. |
 | `tools/balance_sim.py` | The reference implementation of the rules. Don't change it without a human. |
 | `tools/build_storms.py` | Builds `storms_data.gd` from DONKI and RadLab (`--offline` uses the saved extract). |

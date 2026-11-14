@@ -900,15 +900,40 @@ func _step(key: String, delta: int) -> void:
 	if next != int(plan[key]):
 		plan[key] = next
 		hint = ""
-		sound.play("click")
+		_plan_sound()
 	_refresh()
+
+
+## The sound of a change to the plan: a click, or the "can't do that" sound
+## when the plan no longer fits (the notice line says why).
+func _plan_sound() -> void:
+	sound.play("click" if game.check_plan(plan) == "ok" else "invalid")
+
+
+## The meters that are low right now (the same test the meters panel uses).
+func _low_meters() -> Array:
+	var low: Array = []
+	var total_turns := _n("TURNS_PER_LEVEL")
+	var nights_left: int = total_turns - maxi(game.turn, _n("DAY_TURNS") + 1) + 1
+	if not game.is_day() and game.battery + 1e-9 < float(_n("LS_NEEDED") * nights_left):
+		low.append("battery")
+	if float(game.air) / float(_n("AIR_MAX")) * 100.0 < AIR_LOW_PCT:
+		low.append("air")
+	if game.dose > DOSE_HIGH:
+		low.append("radiation")
+	if game.has_food():
+		if game.water < 2 * _n("WATER_USED_NO_RECYCLER"):
+			low.append("water")
+		if game.food < 2 * _n("FOOD_EATEN"):
+			low.append("food")
+	return low
 
 
 func _toggle_greenhouse() -> void:
 	plan["greenhouse"] = not bool(plan["greenhouse"])
 	last_control = "greenhouse"
 	hint = ""
-	sound.play("click")
+	_plan_sound()
 	_refresh()
 
 
@@ -926,7 +951,7 @@ func _choose(what: String) -> void:
 		science_before_shelter = 0
 	choice = what
 	hint = ""
-	sound.play("click")
+	_plan_sound()
 	_refresh()
 
 
@@ -1010,7 +1035,6 @@ func _refresh() -> void:
 	var alert := game.alert_for_turn()  # class, date and dots only: never the outcome
 	var need_choice := not alert.is_empty() and choice == ""
 	var total_turns := _n("TURNS_PER_LEVEL")
-	var nights_left: int = total_turns - maxi(game.turn, _n("DAY_TURNS") + 1) + 1
 	var is_new := with_food and hint == _t("messages.new_meters")
 
 	# top bar
@@ -1031,20 +1055,19 @@ func _refresh() -> void:
 	click_hint.visible = not in_greenhouse
 
 	# meters
-	_set_meter("battery", game.battery, float(_n("BATTERY_MAX")),
-		not day and game.battery + 1e-9 < float(_n("LS_NEEDED") * nights_left))
-	_set_meter("air", float(game.air), float(_n("AIR_MAX")),
-		float(game.air) / float(_n("AIR_MAX")) * 100.0 < AIR_LOW_PCT)
-	_set_meter("radiation", game.dose, float(_n("DOSE_LIMIT")), game.dose > DOSE_HIGH)
+	var low := _low_meters()
+	_set_meter("battery", game.battery, float(_n("BATTERY_MAX")), low.has("battery"))
+	_set_meter("air", float(game.air), float(_n("AIR_MAX")), low.has("air"))
+	_set_meter("radiation", game.dose, float(_n("DOSE_LIMIT")), low.has("radiation"))
 	for key in ["water", "food"]:
 		var parts: Dictionary = _meters[key]
 		(parts["row"] as Control).visible = with_food
 		(parts["name"] as Label).text = _t("meters." + key) + ("  " + _t("meters.new") if is_new else "")
 		(parts["name"] as Label).add_theme_color_override("font_color", Kit.C_SUN if is_new else Kit.C_TEXT)
 	if with_food:
-		_set_meter("water", float(game.water), float(_n("WATER_START")), game.water < 2 * _n("WATER_USED_NO_RECYCLER"))
+		_set_meter("water", float(game.water), float(_n("WATER_START")), low.has("water"))
 		# a full Food bar feeds the whole level
-		_set_meter("food", float(game.food), float(_n("FOOD_EATEN") * total_turns), game.food < 2 * _n("FOOD_EATEN"))
+		_set_meter("food", float(game.food), float(_n("FOOD_EATEN") * total_turns), low.has("food"))
 	var recycler_on: bool = int(plan["life_support"]) >= _n("LS_NEEDED")
 	recycler_label.visible = with_food
 	recycler_label.text = "      " + (_t("meters.recycler_on") if recycler_on else _t("meters.recycler_off"))
@@ -1242,9 +1265,12 @@ func _end_turn() -> void:
 	if not game.alert_for_turn().is_empty() and choice == "":
 		return  # the alert needs an answer first
 	var played_turn := game.turn
+	var low_before := _low_meters()
+	var shield_before := game.shield
 	var result := game.take_turn(plan.duplicate())
 	var status := str(result["status"])
 	if status == "invalid":
+		sound.play("invalid")
 		_refresh()
 		return
 	report = _build_turn_report(played_turn)  # after the turn: the record may be shown
@@ -1256,14 +1282,28 @@ func _end_turn() -> void:
 	_carry_plan_to_new_turn()
 	if game.turn == _n("DAY_TURNS") + 1:
 		hint = _t("messages.night_hint")
+	# One sound for the new turn, the most important first: a storm that came,
+	# a new alert, a meter that has just gone low, the all-clear after an alert,
+	# a finished shield layer, or a plain click.
 	var cue := "click"
-	if not report.is_empty() and bool(report["hit"]):
-		cue = "shelter" if bool(report["sheltered"]) else "storm_hit"
-	if not game.alert_for_turn().is_empty():
+	var newly_low := false
+	for key in _low_meters():
+		if not low_before.has(key):
+			newly_low = true
+	var alert_now := not game.alert_for_turn().is_empty()
+	if alert_now:
 		in_greenhouse = false  # look at the Sun
 		_close_part()  # the alert box needs the space
-		if cue == "click":
-			cue = "alert"
+	if not report.is_empty() and bool(report["hit"]):
+		cue = "shelter" if bool(report["sheltered"]) else "storm_hit"
+	elif alert_now:
+		cue = "alert"
+	elif newly_low:
+		cue = "low"
+	elif not report.is_empty():
+		cue = "false_alarm"
+	elif game.shield > shield_before:
+		cue = "shield"
 	sound.play(cue)
 	_refresh()
 
