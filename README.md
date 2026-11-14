@@ -1,3 +1,18 @@
+# Lunar Night Shift — balanced browser game
+
+Open `game/index.html` in a browser. No installation or server is required.
+
+- Easy has one two-step mission, three stars and supplies between stages.
+- Medium/Hard retain longer missions, radiation restrictions and remote repairs.
+- NASA DONKI records and retrieval metadata are bundled for offline play.
+- Run checks with `node tests/run.js`.
+- See `game/README.md` for rules, data refresh and validation details.
+
+Legacy `tools/balance_sim.py`, `tools/build_storms.py`, `game/data.js`, `game/storms.js` and `game/text.js` are retained for reference and are not used by the current game. Refresh current data with `game/tools/fetch_nasa.py`.
+
+---
+
+## Original Godot prototype
 # Orbit 27 · Godot 4 controls prototype
 
 Unzip the project. In Godot 4 Project Manager, choose **Import**, select

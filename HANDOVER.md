@@ -1,3 +1,5 @@
+> Historical handover: superseded on this branch by game/README.md and game/SIMPLIFICATION.md.
+
 # Lunar Night Shift: handover for the coding agent
 
 You are building **Lunar Night Shift**, a browser game for kids aged 7 to 12, for the NASA Space Apps 2026 hackathon. This file is your complete brief. It replaces the two planning PDFs, which aren't in the repo. Read all of it before you write code.

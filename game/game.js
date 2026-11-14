@@ -1,374 +1,97 @@
-/* game.js: LNS.Engine, the rules of Lunar Night Shift.
- *
- * No DOM access at all. Deterministic: no Math.random. The reference
- * implementation is tools/balance_sim.py; the turn order in takeTurn() follows
- * HANDOVER.md section 4.7 step by step and tests/run.js checks it against the
- * simulator's results.
- *
- * NO PEEKING: whether a storm really followed a flare (`followed`) is read in
- * exactly one place before a turn is played: resolveStorm(), which runs inside
- * takeTurn(). alertForTurn() and getState() never return it or anything
- * computed from it. getDebrief() shows it only for turns already played.
- */
-(function (root) {
-  "use strict";
-
-  var LNS = root.LNS = root.LNS || {};
-
-  // English fallbacks, used when text.js is not loaded (tests, console play).
-  var FALLBACK_MESSAGES = {
-    negative: "No negative power",
-    lsMax: "Life support can't go above 5",
-    noChargeNight: "No sunlight: you can't charge at night",
-    noScienceShelter: "No science while sheltering",
-    noAlert: "No storm alert this turn",
-    shieldFull: "The shield is already full",
-    noGreenhouse: "No greenhouse on this level",
-    notEnoughPower: "Not enough power",
-    levelOver: "This level is over"
-  };
-  var FALLBACK_TIPS = {
-    lostAir: "Life support needs power every turn, even at night. Charge the battery in daylight.",
-    lostDose: "Radiation never goes away. Build shielding, or shelter when a big flare is spotted.",
-    lostFood: "Grow food while the sun shines: the greenhouse costs 1 power by day but 4 at night.",
-    lostWater: "Keep life support at 3 or more so the water recycler keeps running.",
-    highDose: "You made it, but your radiation is high. The next levels have more storms.",
-    "default": "Great work. Could you earn more stars without losing safety?"
-  };
-  var HIGH_DOSE_TIP = 60; // the "your radiation is high" tip shows above this (section 7)
-  var EPS = 1e-9;         // the battery is a float (charging adds 0.8 per power)
-
-  var s = null;           // the whole game state
-  var lastResult = null;  // the result that ended the current level, if it has ended
-
-  // ---------------------------------------------------------------- helpers
-  function P() { return LNS.NUMBERS; }
-
-  function text(group, key, fallbacks) {
-    var t = LNS.TEXT && LNS.TEXT[group];
-    return (t && typeof t[key] === "string") ? t[key] : fallbacks[key];
+/* Pure mission engine. Snapshot data is copied; unresolved events stay private. */
+(function(root){'use strict';const L=root.LNS=root.LNS||{};
+const MODES={easy:{stages:4,size:2,food:12,battery:28,fuel:0,goal:6},medium:{stages:7,size:4,food:18,battery:22,fuel:7,goal:18},hard:{stages:7,size:4,food:12,battery:16,fuel:5,goal:30}};
+const TITLES=['Establish the base','Grow and investigate','Prepare for darkness','Sunset','Protect the crew','Maintain the outpost','Reach sunrise'];
+const copy=x=>JSON.parse(JSON.stringify(x));
+L.createMission=function(mode='medium',seed=Date.now(),data=L.NASA){
+ if(!MODES[mode])throw Error('Unknown difficulty');const cfg=MODES[mode],total=cfg.stages*cfg.size;let rng=seed>>>0;
+ const rand=()=>{rng=(Math.imul(rng,1664525)+1013904223)>>>0;return rng/4294967296;};
+ const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){let j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+ const template=['samples','relay','garden'][Math.floor(rand()*3)];
+ const chosen=shuffle(data.bundles.filter(b=>b.hit)).slice(0,3).concat(shuffle(data.bundles.filter(b=>!b.hit)).slice(0,mode==='easy'?2:5)).sort((a,b)=>a.start.localeCompare(b.start));
+ if(chosen.filter(b=>b.hit).length!==3)throw Error('NASA training dataset needs three hit clusters');
+ const slots=shuffle(Array.from({length:total-cfg.size},(_,i)=>i+cfg.size+1)).slice(0,chosen.length).sort((a,b)=>a-b);
+ const events=new Map(chosen.map((b,i)=>[slots[i],b]));
+ let s={mode,seed:seed>>>0,template,shift:1,stage:1,total,stageSize:cfg.size,phase:'playing',battery:cfg.battery,food:cfg.food,air:60,fuel:cfg.fuel,risk:0,shield:0,shieldWork:0,repair:0,primary:0,analysis:0,bonus:0,crop:null,history:[],notice:'',reason:null};let checkpoint=copy(s);
+ const day=()=>s.shift<=total/2,warning=()=>events.get(s.shift),fault=()=>mode!=='easy'&&s.shift>cfg.size*2&&s.repair<12;
+ const objective=()=>({samples:['Collect Moon samples','Collect samples','Analyse samples'],relay:['Restore the communications relay','Repair relay modules','Calibrate the relay'],garden:['Study lunar greenhouse growth','Gather soil samples','Analyse plant growth']}[template]);
+ function achievements(){const awards=[{title:'Safe return',done:s.phase==='won'}, {title:objective()[1],done:s.primary>=cfg.goal},{title:objective()[2],done:s.analysis>=cfg.goal},{title:'Repair the cooling system',done:s.repair>=12},{title:'Extra discovery',done:s.bonus>=6},{title:'Careful exposure: finish below 40 risk',done:s.phase==='won'&&s.risk<40},{title:'Prepared return: 8 battery and 2 food',done:s.phase==='won'&&s.battery>=8&&s.food>=2}];return mode==='easy'?awards.slice(0,3):awards;}
+ function state(){return {...copy(s),isDay:day(),title:mode==='easy'?['First steps','Prepare','Night watch','Return'][s.stage-1]:TITLES[s.stage-1],goal:cfg.goal,objective:objective()[0],achievements:achievements(),background:0.5};}
+ function alert(){const b=warning();if(!b)return null;return {classType:b.flares[0].classType,date:b.flares[0].peakTime.slice(0,10),baseRisk:[68,50,34][s.shield],shelterRisk:1.5};}
+ function tasks(shelter=false){
+ const out=[
+  {id:'charge',name:'Charge battery',crew:1,energy:6,description:'+4.8 stored energy; sunlight only.',blocked:!day()?'No sunlight':s.battery>=90?'Battery full':''},
+  {id:'fuel',name:'Run backup generator',crew:1,energy:0,description:'Use 1 fuel to add 5 energy before this shift.',blocked:s.fuel<1?'No fuel left':s.battery>=90?'Battery full':''},
+  {id:'grow',name:'Start a food crop',crew:1,energy:day()?1:2,description:'Harvest 6 food automatically in two shifts.',blocked:s.crop?'A crop is already growing':s.shift+2>total?'Too late to harvest':''},
+  {id:'shield',name:'Build passive shielding',crew:2,energy:3,outdoor:true,description:`${s.shieldWork}/6 work toward next layer. +3 per shift; works next shift.`,blocked:s.shield>=2?'Both layers complete':''},
+  {id:'repair',name:'Repair cooling: outside',crew:1,energy:1,outdoor:true,repair:true,description:`${s.repair}/12 repaired. +3 work; prevents extra energy drain.`,blocked:s.repair>=12?'Repair complete':''},
+  {id:'remote',name:'Repair cooling: robot',crew:1,energy:2,repair:true,description:`${s.repair}/12 repaired. +2 work; indoor alternative.`,blocked:s.repair>=12?'Repair complete':''},
+  {id:'primary',name:objective()[1],crew:mode==='easy'?1:2,energy:2,outdoor:true,description:`${s.primary}/${cfg.goal} work. +3 per shift. ${Math.ceil((cfg.goal-s.primary)/3)} shifts remaining. Collect before risk reaches 40.`,blocked:s.primary>=cfg.goal?'Subtask complete':''},
+  {id:'analyse',name:objective()[2],crew:1,energy:1,safe:true,description:`${s.analysis}/${cfg.goal} work. +3 per shift. Available in shelter.`,blocked:s.primary<=s.analysis?'Collect more material first':s.analysis>=cfg.goal?'Objective complete':''},
+  {id:'bonus',name:'Time-sensitive discovery',crew:2,energy:2,outdoor:true,description:`${s.bonus}/6 work. +3 per shift. Deadline: shift ${mode==='easy'?total-2:total/2}.`,blocked:s.bonus>=6?'Discovery complete':s.shift>(mode==='easy'?total-2:total/2)?'Deadline passed':''}
+ ];
+ return out.filter(t=>mode!=='easy'||!['fuel','repair','remote','bonus'].includes(t.id)).map(t=>({...t,blocked:t.blocked||(['repair','remote','bonus'].includes(t.id)&&s.stage===1?'Introduced in stage 2':t.outdoor&&s.risk>=40?'Mission Control: outdoor work restricted':shelter&&!t.safe?'Paused during sheltering':'')}));
+ }
+ function preview(plan){
+ const ids=plan.tasks||[],shelter=!!plan.shelter,all=tasks(shelter);let error='';
+ if(s.phase!=='playing')error='This stage has ended.';
+ if(!Array.isArray(ids)||new Set(ids).size!==ids.length)return {error:'Choose each task once.'};
+ const selected=ids.map(id=>all.find(t=>t.id===id));
+ if(selected.some(t=>!t))return {error:'Unknown task.'};
+ if(shelter&&!warning())error='Quiet shift.';
+ if(selected.some(t=>t.blocked))error=selected.find(t=>t.blocked).blocked;
+ if(ids.includes('repair')&&ids.includes('remote'))error='Choose one method for the cooling repair.';
+ const crew=selected.reduce((a,t)=>a+t.crew,0)+(shelter?1:0);
+ const energy=selected.reduce((a,t)=>a+t.energy,0)+2+(fault()?1:0)+(shelter?1:0);
+ const available=(day()?10:s.battery)+(ids.includes('fuel')?5:0);
+ if(crew>3)error='Only three crew are available.';
+ if(energy>available+1e-9)error=mode==='easy'?'Not enough energy. Remove a task.':'Not enough energy. Remove a task or use the generator.';
+ return {error,crew,energy,available,baseline:2+(fault()?1:0),interrupted:selected.filter(t=>t.outdoor).map(t=>t.name)};
+ }
+ function take(plan){const v=preview(plan);if(v.error)return {status:'invalid',message:v.error};
+ const before=copy(s),ids=plan.tasks||[],shelter=!!plan.shelter,b=warning();let messages=[];
+ if(ids.includes('fuel')){s.fuel--;s.battery=Math.min(90,s.battery+5);}
+ if(!day())s.battery-=v.energy;else s.battery-=Math.max(0,v.energy-10);
+ // In daylight the generator adds storage; sunlight pays task costs.
+ const delta=0.5+(b&&b.hit?(shelter?1.5:[68,50,34][s.shield]):0);s.risk+=delta;
+ let failed=s.risk>=100;
+ if(s.crop&&s.crop.ready===s.shift){s.food+=6;s.crop=null;messages.push('Harvest arrived: +6 food.');}
+ s.food--;failed=failed||s.food<0;
+ for(const id of ids){const t=tasks(false).find(t=>t.id===id);if(failed)break;if(t.outdoor&&s.risk>=40){messages.push(t.name+' stopped: safety restriction.');continue;}
+  if(id==='charge')s.battery=Math.min(90,s.battery+4.8);
+  if(id==='grow')s.crop={ready:s.shift+2};
+  if(id==='shield'){s.shieldWork+=3;if(s.shieldWork>=6){s.shield++;s.shieldWork=0;}}
+  if(id==='repair')s.repair=Math.min(12,s.repair+3);
+  if(id==='remote')s.repair=Math.min(12,s.repair+2);
+  if(id==='primary')s.primary=Math.min(cfg.goal,s.primary+3);
+  if(id==='analyse')s.analysis=Math.min(s.primary,cfg.goal,s.analysis+3);
+  if(id==='bonus')s.bonus=Math.min(6,s.bonus+3);
+ }
+ if(failed){s.phase='lost';s.reason=s.risk>=100?'Radiation risk reached the mission limit.':'Food ran out.';}
+ const record=b?{id:b.id,hit:b.hit,flares:copy(b.flares),seps:copy(b.seps),originalStart:b.start,sheltered:shelter}:null;
+ messages.push(b?(b.hit?`Storm: risk +${delta-0.5}.`:'No storm hit.'):'Quiet shift.');
+ s.history.push({shift:s.shift,stage:s.stage,risk:s.risk,battery:s.battery,food:s.food,plan:copy(plan),event:record});
+ s.notice=messages.join(' ');
+ if(s.phase!=='lost'){
+  if(s.shift===total)s.phase='won';
+  else if(s.shift%cfg.size===0&&mode==='easy')s.phase='stageComplete';
+  else if(s.shift%cfg.size===0){
+   const remaining=total-s.shift,foodReserve=s.crop?Math.max(0,s.crop.ready-s.shift-1):2;
+   const nightReserve=remaining*4+2*Math.ceil(Math.max(0,remaining-s.food-(s.crop?6:0))/6);
+   if(s.food<foodReserve||s.food+(s.crop?6:0)<cfg.size){s.phase='lost';s.reason='Stage reserve check: keep food for the next stage, or a crop arriving before supplies run out.';}
+   else if(s.shift>=total/2&&(s.battery+s.fuel*5<nightReserve||s.battery<Math.min(cfg.size,remaining)*4)){s.phase='lost';s.reason='Stage reserve check: more stored energy or backup fuel is needed for a recoverable night. Retry this stage.';}
+   else if(s.risk+remaining*0.5+4.5>=100){s.phase='lost';s.reason='Stage reserve check: leave room for background exposure and protected storm responses.';}
+   else s.phase='stageComplete';
   }
-  function message(key) { return text("messages", key, FALLBACK_MESSAGES); }
-
-  function ensure() { if (s === null) startGame(); }
-
-  function levelDef(n) { return LNS.LEVELS[n - 1]; }
-
-  function hasFood() { return !!levelDef(s.level).hasFood; }
-
-  /** The saved real stretch of 2024 for level n, or null (Levels 1 and 2). */
-  function stormWindow(n) {
-    var def = levelDef(n);
-    var all = LNS.STORMS && LNS.STORMS.windows;
-    if (!def.window || !all || !all[def.window] || !all[def.window].length) return null;
-    return all[def.window][0];
-  }
-
-  /** The saved record for the current turn, or null. Engine-internal: it holds `followed`. */
-  function stormThisTurn() {
-    var w = stormWindow(s.level);
-    if (!w) return null;
-    for (var i = 0; i < w.turns.length; i++) {
-      if (w.turns[i].turn === s.turn) return w.turns[i];
-    }
-    return null;
-  }
-
-  function addDays(isoDate, days) {
-    var p = isoDate.split("-");
-    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + days));
-    return d.toISOString().slice(0, 10);
-  }
-
-  // ---------------------------------------------------------------- levels
-  function startGame() {
-    s = { level: 1, dose: 0, shield: 0, shieldProgress: 0, stars: 0 };
-    startLevel(1);
-  }
-
-  function startLevel(n) {
-    var p = P();
-    var food = !!levelDef(n).hasFood;
-    s.level = n;
-    s.turn = 1;
-    s.battery = p.START_BATTERY;
-    s.air = p.START_AIR;
-    s.food = food ? p.FOOD_START : null;    // food and water reset each level,
-    s.water = food ? p.WATER_START : null;  // like the battery and the air
-    s.history = [];
-    s.stormLog = [];
-    s.phase = "playing";
-    s.levelStart = { dose: s.dose, shield: s.shield, shieldProgress: s.shieldProgress, stars: s.stars };
-    lastResult = null;
-  }
-
-  /** Same level again, with the dose, shield and stars it started with. */
-  function retryLevel() {
-    ensure();
-    var keep = s.levelStart;
-    s.dose = keep.dose;
-    s.shield = keep.shield;
-    s.shieldProgress = keep.shieldProgress;
-    s.stars = keep.stars;
-    startLevel(s.level);
-  }
-
-  /** Dose, shield, shield progress and stars carry over. Only after a level is won. */
-  function nextLevel() {
-    ensure();
-    if (s.phase !== "level_won" || s.level >= LNS.LEVELS.length) return;
-    startLevel(s.level + 1);
-  }
-
-  // ---------------------------------------------------------------- questions
-  function getState() {
-    ensure();
-    return {
-      level: s.level,
-      levelCount: LNS.LEVELS.length,
-      turn: s.turn,
-      turnsPerLevel: P().TURNS_PER_LEVEL,
-      isDay: isDay(),
-      battery: s.battery,
-      air: s.air,
-      water: s.water,
-      food: s.food,
-      dose: s.dose,
-      shield: s.shield,
-      shieldProgress: s.shieldProgress,
-      stars: s.stars
-    };
-  }
-
-  function getLevelInfo() {
-    ensure();
-    var index = s.level - 1;
-    var def = levelDef(s.level);
-    var w = stormWindow(s.level);
-    var start = w ? w.start : null;
-    var named = LNS.TEXT && LNS.TEXT.levels && LNS.TEXT.levels[index];
-    return {
-      index: index,
-      name: (named && named.name) || def.name,
-      hasFood: !!def.hasFood,
-      hasStorms: !!w,
-      windowStart: start,
-      /** The real dates a turn covers: {from, to}, both days included. */
-      turnDates: function (turn) {
-        if (!start) return null;
-        return { from: addDays(start, 2 * (turn - 1)), to: addDays(start, 2 * turn - 1) };
-      }
-    };
-  }
-
-  function isDay() {
-    ensure();
-    return s.turn <= P().DAY_TURNS;
-  }
-
-  function powerAvailable() {
-    ensure();
-    return isDay() ? P().SOLAR_POWER : s.battery;
-  }
-
-  function totalSpend(plan) {
-    var p = P();
-    var spend = plan.lifeSupport + plan.shield + plan.science + plan.charge;
-    if (plan.shelter) spend += p.SHELTER_COST;
-    if (plan.greenhouse) spend += isDay() ? p.GREENHOUSE_DAY : p.GREENHOUSE_NIGHT;
-    return spend;
-  }
-
-  /** "ok", or the first rule that fails (HANDOVER.md section 4.8). Changes nothing. */
-  function checkPlan(plan) {
-    ensure();
-    var p = P();
-    var amounts = [plan.lifeSupport, plan.shield, plan.science, plan.charge];
-    for (var i = 0; i < amounts.length; i++) {
-      if (typeof amounts[i] !== "number" || !(amounts[i] >= 0) || !isFinite(amounts[i])) {
-        return message("negative");
-      }
-    }
-    if (plan.lifeSupport > p.LS_MAX) return message("lsMax");
-    if (!isDay() && plan.charge > 0) return message("noChargeNight");
-    if (plan.shelter && plan.science > 0) return message("noScienceShelter");
-    if (plan.shelter && stormThisTurn() === null) return message("noAlert");
-    if (s.shield >= p.MAX_SHIELD && plan.shield > 0) return message("shieldFull");
-    if (plan.greenhouse && !hasFood()) return message("noGreenhouse");
-    if (totalSpend(plan) > powerAvailable() + EPS) return message("notEnoughPower");
-    return "ok";
-  }
-
-  /** What the screen is ALLOWED to know about this turn's flare. Never `followed`. */
-  function alertForTurn() {
-    ensure();
-    var storm = stormThisTurn();
-    if (storm === null) return null;
-    var chance = LNS.STORMS.chance[storm.shown.cls];
-    return {
-      cls: storm.shown.cls,
-      fullClass: storm.shown.fullClass,
-      date: storm.shown.peak.slice(0, 10),
-      dots: chance.dots   // from the flare class alone (archive rate), same for every flare of that class
-    };
-  }
-
-  // ---------------------------------------------------------------- one turn
-  function addToShield(power) {
-    var p = P();
-    s.shieldProgress += power;
-    while (s.shieldProgress >= p.SHIELD_COST && s.shield < p.MAX_SHIELD) {
-      s.shield += 1;
-      s.shieldProgress -= p.SHIELD_COST;
-    }
-  }
-
-  /** What REALLY happened, from the saved record. The only reader of `followed`. */
-  function resolveStorm(sheltered) {
-    var storm = stormThisTurn();
-    if (storm === null) return;
-    var dose = 0;
-    if (storm.followed) {
-      dose = sheltered ? P().SHELTER_DOSE : P().DOSE_BY_SHIELD[s.shield];
-    }
-    s.dose += dose;
-    s.stormLog.push({ turn: s.turn, sheltered: !!sheltered, dose: dose, record: storm });
-  }
-
-  function end(result) {
-    s.phase = result.status;
-    lastResult = result;
-    return result;
-  }
-
-  function takeTurn(plan) {
-    ensure();
-    var p = P();
-    // 1. check first, change second
-    if (s.phase !== "playing") return { status: "invalid", message: message("levelOver") };
-    var problem = checkPlan(plan);
-    if (problem !== "ok") return { status: "invalid", message: problem };
-
-    var day = isDay();
-    var food = hasFood();
-    // 2. at night the battery pays; by day the sun does
-    if (!day) s.battery -= totalSpend(plan);
-    // 3. air
-    s.air = Math.max(0, Math.min(p.AIR_MAX, s.air + (plan.lifeSupport - p.LS_NEEDED) * p.AIR_PER_POWER));
-    // 4. shield
-    addToShield(plan.shield);
-    // 5. science
-    if (!plan.shelter) s.stars += plan.science;
-    // 6. charging
-    if (day) s.battery = Math.min(p.BATTERY_MAX, s.battery + plan.charge * p.CHARGE_EFFICIENCY);
-    // 7. food and water
-    if (food) {
-      if (plan.greenhouse) {
-        s.food += p.FOOD_PER_GREENHOUSE;
-        s.water -= p.GREENHOUSE_WATER;
-      }
-      s.food -= p.FOOD_EATEN;
-      s.water -= (plan.lifeSupport >= p.LS_NEEDED) ? p.WATER_USED : p.WATER_USED_NO_RECYCLER;
-    }
-    // 8. the real record decides
-    resolveStorm(plan.shelter);
-    // 9. history
-    s.history.push({
-      turn: s.turn, battery: s.battery, air: s.air, water: s.water, food: s.food, dose: s.dose,
-      plan: {
-        lifeSupport: plan.lifeSupport, shield: plan.shield, science: plan.science, charge: plan.charge,
-        shelter: !!plan.shelter, greenhouse: !!plan.greenhouse
-      }
-    });
-    // 10. lose checks, in this order
-    if (s.air <= 0) return end({ status: "lost", reason: "air" });
-    if (s.dose >= p.DOSE_LIMIT) return end({ status: "lost", reason: "dose" });
-    if (food && s.food < 0) return end({ status: "lost", reason: "food" });
-    if (food && s.water < 0) return end({ status: "lost", reason: "water" });
-    // 11. the level ends after the last turn
-    if (s.turn === p.TURNS_PER_LEVEL) {
-      return end({ status: s.level === LNS.LEVELS.length ? "game_won" : "level_won" });
-    }
-    // 12. next turn
-    s.turn += 1;
-    return { status: "continue" };
-  }
-
-  // ---------------------------------------------------------------- debrief
-  function getDebrief(result) {
-    ensure();
-    result = result || lastResult || { status: "continue" };
-    var p = P();
-    var food = hasFood();
-    var w = stormWindow(s.level);
-    var played = s.history.length;
-
-    var history = s.history.map(function (h) {
-      return { turn: h.turn, battery: h.battery, air: h.air, water: h.water, food: h.food, dose: h.dose };
-    });
-
-    // Only turns already played are in the log, so `followed` may be shown here.
-    var storms = s.stormLog.map(function (entry) {
-      var rec = entry.record;
-      return {
-        turn: entry.turn,
-        fullClass: rec.shown.fullClass,
-        date: rec.shown.peak.slice(0, 10),
-        link: rec.shown.link,
-        followed: rec.followed,
-        sheltered: entry.sheltered,
-        dose: entry.dose,
-        causes: rec.flares.filter(function (f) { return f.followed; }).map(function (f) {
-          return { fullClass: f.fullClass, date: f.peak.slice(0, 10), link: f.link };
-        })
-      };
-    });
-
-    // Measured radiation at the Moon, for the chart. Turns not yet played stay
-    // hidden (null) so a lost level's debrief can't show storms still to come.
-    var moonDose = null;
-    if (w && w.moonDose) {
-      moonDose = w.moonDose.map(function (v, i) { return i < played ? v : null; });
-    }
-
-    var recyclerSaved = null;
-    if (food) {
-      var turnsOn = s.history.filter(function (h) { return h.plan.lifeSupport >= p.LS_NEEDED; }).length;
-      recyclerSaved = turnsOn * (p.WATER_USED_NO_RECYCLER - p.WATER_USED);
-    }
-
-    var tipKey = "default";
-    if (result.status === "lost") {
-      tipKey = { air: "lostAir", dose: "lostDose", food: "lostFood", water: "lostWater" }[result.reason] || "default";
-    } else if (s.dose > HIGH_DOSE_TIP) {
-      tipKey = "highDose";
-    }
-
-    return {
-      result: result,
-      levelIndex: s.level - 1,
-      history: history,
-      storms: storms,
-      moonDose: moonDose,
-      stormTurns: storms.filter(function (st) { return st.followed; }).map(function (st) { return st.turn; }),
-      recyclerSaved: recyclerSaved,
-      tipKey: tipKey,
-      tip: text("tips", tipKey, FALLBACK_TIPS)
-    };
-  }
-
-  LNS.Engine = {
-    startGame: startGame,
-    getState: getState,
-    getLevelInfo: getLevelInfo,
-    isDay: isDay,
-    powerAvailable: powerAvailable,
-    totalSpend: function (plan) { ensure(); return totalSpend(plan); },
-    checkPlan: checkPlan,
-    alertForTurn: alertForTurn,
-    takeTurn: takeTurn,
-    getDebrief: getDebrief,
-    nextLevel: nextLevel,
-    retryLevel: retryLevel
-  };
+  else s.shift++;
+ }
+ // Empty battery with no generator means no future life support. End this stage rather than accept an invalid plan forever.
+ if(s.phase==='playing'&&!day()&&s.battery<2+(fault()?1:0)&&s.fuel===0){s.phase='lost';s.reason='Not enough stored energy for life support.';}
+ return {status:s.phase,notice:s.notice};
+ }
+ function next(){if(s.phase!=='stageComplete')return;s.stage++;s.shift++;s.phase='playing';if(mode==='easy'){s.battery=Math.min(90,s.battery+4);s.food+=2;s.notice='Stage supplies: +4 battery, +2 food.';}checkpoint=copy(s);}
+ function retry(){s=copy(checkpoint);}
+ function debrief(){return copy(s.history);}
+ return {state,alert,tasks,preview,take,next,retry,debrief};
+};
 })(globalThis);

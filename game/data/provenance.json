@@ -1,0 +1,18 @@
+{
+  "retrievedAt": "2026-11-14T10:09:53.107232+00:00",
+  "sources": [
+    {
+      "url": "https://ccmc.gsfc.nasa.gov/DONKI-API/get/FLR?startDate=2024-05-01&endDate=2024-06-15&catalog=M2M_CATALOG&version=Latest",
+      "file": "data/flr.json",
+      "sha256": "1ebb7853aa119acfa31a04a0cfbd49d6405e2cc5c4d11ed61e7a9d78396e6a03",
+      "count": 218
+    },
+    {
+      "url": "https://ccmc.gsfc.nasa.gov/DONKI-API/get/SEP?startDate=2024-04-25&endDate=2024-06-15&catalog=M2M_CATALOG&version=Latest",
+      "file": "data/sep.json",
+      "sha256": "8bdbcfa66a3fc5757a8afd2e729107a2dd2e0a95d86c7f04ad6e98c1bdccd5f8",
+      "count": 27
+    }
+  ],
+  "aggregation": "Shared flare associations or adjacent SEP observations within 48h; training clusters, not independent physical storms. Missing linkage is not proof of no hazard."
+}

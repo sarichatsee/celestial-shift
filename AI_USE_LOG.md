@@ -8,3 +8,4 @@ One line per session or milestone: date, tool, what it produced or changed.
 - 2026-11-14 · Claude Fable 5.2 coding agent · M3: wrote the game screen (`game/index.html`, `style.css`, `ui.js`), all on-screen words (`text.js`), a placeholder base picture (`base.js`, `base.css`) and text/page tests.
 - 2026-11-14 · Claude Fable 5.2 coding agent · M4: added the storm alert box (flare class, dots out of 10, Shelter/Stay), the after-turn storm report, and the debrief with real-date storm cards, DONKI links, tips and retry/next buttons.
 - 2026-11-14 · Claude Fable 5.2 coding agent · M5: added the title screen, level intros with real dates, the Science Behind It page, the battery chart, the Moon radiation chart (RadLab data from the online build) and the recycler line.
+- 2026-11-15 · OpenAI Codex · Integrated the approved balanced browser game, simplified Easy mode, NASA DONKI source records/provenance and updated regression tests.
