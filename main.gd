@@ -58,6 +58,8 @@ var alert_title: Label
 var alert_dots: DotRow
 var alert_chance: Label
 var alert_when: Label
+var alert_stakes: Label
+var alert_cost: Label
 var shelter_button: Button
 var stay_button: Button
 var report_panel: PanelContainer
@@ -278,6 +280,10 @@ func _build_alert() -> void:
 	head.add_child(Kit.label(_t("alert.heading"), 16, Kit.C_SUN))
 	alert_title = Kit.label("", 22)
 	head.add_child(alert_title)
+	alert_when = Kit.label("", 15, Kit.C_MUTED)
+	alert_when.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	alert_when.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(alert_when)
 	box.add_child(head)
 	var odds := Kit.hbox(10)
 	alert_dots = DotRow.new()
@@ -285,8 +291,11 @@ func _build_alert() -> void:
 	alert_chance = Kit.label("", 18)
 	odds.add_child(alert_chance)
 	box.add_child(odds)
-	alert_when = Kit.label("", 15, Kit.C_MUTED)
-	box.add_child(alert_when)
+	# what is at stake if a storm comes, and what sheltering gives up
+	alert_stakes = Kit.label("", 18)
+	box.add_child(alert_stakes)
+	alert_cost = Kit.label("", 15, Kit.C_MUTED)
+	box.add_child(alert_cost)
 	var choices := Kit.hbox(12)
 	shelter_button = Kit.button("", 360)
 	shelter_button.toggle_mode = true
@@ -783,6 +792,15 @@ func _refresh() -> void:
 		alert_dots.tooltip_text = "%d / 10" % int(alert["dots"])
 		alert_chance.text = _t("alert.chance", {"dots": alert["dots"]})
 		alert_when.text = _t("alert.when", {"date": _fmt_date(str(alert["date"]))})
+		var stakes := game.storm_stakes(plan)  # numbers only: what a storm WOULD add
+		alert_stakes.text = _t("alert.stakes", {"stay": _num(stakes["stay"]), "shelter": _num(stakes["shelter"])})
+		var sheltering := bool(plan["shelter"])
+		var stars: int = science_before_shelter if sheltering else int(plan["science"])
+		if stars <= 0:
+			alert_cost.text = _t("alert.gives_up_none", {"cost": _n("SHELTER_COST")})
+		else:
+			var cost_key := ("gave_up" if sheltering else "gives_up") + ("_one" if stars == 1 else "_many")
+			alert_cost.text = _t("alert." + cost_key, {"stars": stars})
 		var shelter_words := _t("alert.shelter", {"cost": _n("SHELTER_COST")})
 		var stay_words := _t("alert.stay")
 		shelter_button.text = _t("alert.chosen", {"text": shelter_words}) if choice == "shelter" else shelter_words

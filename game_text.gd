@@ -138,13 +138,20 @@ const TEXT := {
 		"chosen": "> {text} <",
 		"choose": "Storm alert! Choose: shelter or stay.",
 		"when": "Flare seen on {date}",
+		# what is at stake, and what sheltering gives up (numbers only, never the outcome)
+		"stakes": "If a storm comes: Radiation +{stay} in the main base, +{shelter} in the shelter.",
+		"gives_up_one": "Sheltering would stop science this turn: you give up 1 star.",
+		"gives_up_many": "Sheltering would stop science this turn: you give up {stars} stars.",
+		"gave_up_one": "In the shelter. Science is paused: 1 star given up this turn.",
+		"gave_up_many": "In the shelter. Science is paused: {stars} stars given up this turn.",
+		"gives_up_none": "Sheltering costs {cost} power. No science is planned this turn.",
 	},
 	# What happened on the turn just played (shown only after the turn).
 	"report": {
 		"heading": "Last turn",
 		"storm": "The {full_class} flare sent a radiation storm.",
 		"storm_other": "A radiation storm came.",
-		"false_alarm": "False alarm: no storm followed the {full_class} flare.",
+		"false_alarm": "No radiation storm was recorded after the {full_class} flare.",
 		"sheltered": "You sheltered: Radiation +{dose}.",
 		"stayed": "You stayed in the base: Radiation +{dose}.",
 		"sheltered_nothing": "You sheltered, just in case.",
@@ -192,7 +199,7 @@ const TEXT := {
 		"storm_card": "This flare really happened on {date}, recorded in NASA's DONKI database.",
 		"storm_link": "See the {full_class} flare in DONKI",
 		"followed_yes": "A radiation storm followed.",
-		"followed_no": "False alarm: no storm followed.",
+		"followed_no": "No radiation storm was recorded.",
 		"sheltered": "You sheltered.",
 		"stayed": "You stayed in the main base.",
 		"dose_gain": "Radiation +{dose}",
@@ -243,6 +250,13 @@ const TEXT := {
 				"game": "The storm chance is shown as dots out of 10.",
 				"real": "In 2024, 14 of 54 X-class alerts and 9 of 82 strong M-class alerts were followed by a particle storm. The game uses only the flare class. Real forecasters use much more, and still get false alarms.",
 				"verified": true,  # the counts were checked against the DONKI API on 2026-11-14
+			},
+			{
+				# How tools/build_storms.py works: "followed" means DONKI links a
+				# particle storm (SEP) record to the flare. The rest is a caution, not a claim.
+				"game": "After an alert, the game tells you a radiation storm came, or that none was recorded.",
+				"real": "The game follows the links in DONKI between flares and particle storms. No link means no storm was recorded for that flare. It is not proof that nothing happened.",
+				"verified": true,
 			},
 			{
 				# TODO(verify): lunar day and night are each about 14 Earth days.

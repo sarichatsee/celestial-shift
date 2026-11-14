@@ -640,6 +640,44 @@ func test_shelter_in_a_real_storm_15_and_1_power() -> void:
 	done()
 
 
+func test_storm_stakes_match_what_a_storm_really_adds() -> void:
+	# Level 3, turn 9 is a real storm. The stakes shown before the turn must be
+	# exactly what the turn then adds, for staying and for sheltering.
+	for shelter in [false, true]:
+		var g := at_level(3)
+		until_turn(g, 9)
+		var pl := plan({"life_support": 3, "shelter": shelter})
+		var stakes := g.storm_stakes(pl)
+		var before := g.dose
+		g.take_turn(pl)
+		eq(g.dose - before, stakes["shelter"] if shelter else stakes["stay"])
+	done()
+
+
+func test_storm_stakes_count_a_shield_layer_finished_this_turn() -> void:
+	var g := at_level(3)
+	until_turn(g, 9)
+	eq(g.storm_stakes(plan({"life_support": 3}))["stay"], 20.0)
+	eq(g.storm_stakes(plan({"life_support": 3, "shield": 7}))["stay"], 20.0)
+	var pl := plan({"life_support": 3, "shield": 8})
+	eq(g.storm_stakes(pl)["stay"], 13.0)
+	eq(g.storm_stakes(pl)["shelter"], 1.5)
+	var before := g.dose
+	g.take_turn(pl)
+	eq(g.dose - before, 13.0)
+	done()
+
+
+func test_storm_stakes_never_depend_on_the_record() -> void:
+	# The same numbers on a storm turn (9) and a turn with no storm after it (6).
+	var g := at_level(3)
+	until_turn(g, 6)
+	var quiet := g.storm_stakes(plan({"life_support": 3}))
+	until_turn(g, 9)
+	eq(g.storm_stakes(plan({"life_support": 3})), quiet)
+	done()
+
+
 func test_shelter_means_no_science() -> void:
 	var g := at_level(3)
 	until_turn(g, 6)

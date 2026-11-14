@@ -39,9 +39,10 @@ exactly the stars, radiation and shield that `tools/balance_sim.py` prints
 - **Shield:** 8 power builds one layer. It lasts for the whole game.
 - **Science:** 1 power is 1 star. Stars are the score.
 - **Greenhouse (from Level 2):** grows 3 food; 1 power by day, 4 at night.
-- **Storm alert (Levels 3 and 4):** you see the flare class and a chance in
-  dots out of 10, never the outcome. Shelter costs 1 power and the turn's
-  science.
+- **Storm alert (Levels 3 and 4):** you see the flare class, a chance in
+  dots out of 10, what a storm would add to Radiation in the base and in the
+  shelter, and the stars sheltering gives up. Never the outcome. Shelter
+  costs 1 power and the turn's science.
 
 ## Add your artwork
 

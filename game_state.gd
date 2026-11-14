@@ -268,6 +268,19 @@ func take_turn(plan: Dictionary) -> Dictionary:
 	return {"status": "continue"}
 
 
+## How much Radiation a storm would add this turn IF one comes, with this plan:
+## {"stay": in the main base, "shelter": in the shelter}. Numbers only. It never
+## looks at the saved record, so it is safe to show before the turn is played.
+## Shield power in the plan counts: the shield is built before a storm arrives.
+func storm_stakes(plan: Dictionary) -> Dictionary:
+	var layers := shield
+	var progress := shield_progress + maxi(0, int(plan.get("shield", 0)))
+	while progress >= int(p["SHIELD_COST"]) and layers < int(p["MAX_SHIELD"]):
+		layers += 1
+		progress -= int(p["SHIELD_COST"])
+	return {"stay": float(p["DOSE_BY_SHIELD"][layers]), "shelter": float(p["SHELTER_DOSE"])}
+
+
 func _add_to_shield(power: int) -> void:
 	shield_progress += power
 	while shield_progress >= int(p["SHIELD_COST"]) and shield < int(p["MAX_SHIELD"]):
