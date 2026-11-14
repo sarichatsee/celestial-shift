@@ -98,6 +98,14 @@ RadLab and caches the raw answers in `tools/cache/`.
 
 ## Web build
 
-`export_presets.cfg` exports to `web-export/`. The files there, and the copy
-at the repo root, are still the Orbit 27 prototype: re-export from the Godot
-editor to publish this version.
+`web-export/` holds the web build of this game. The hosting service serves
+that folder. After changing the game, export it again (this needs Godot's
+export templates: **Editor → Manage Export Templates**):
+
+```bash
+godot --headless --path . --export-release "Web" "web-export/Orbit 27 - Controls Prototype.html"
+```
+
+The file names are still the prototype's so the existing link keeps working.
+The export files at the repo root are an old copy of the prototype and are
+not used.
