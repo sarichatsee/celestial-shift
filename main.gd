@@ -8,6 +8,9 @@ const GameState = preload("res://game_state.gd")
 
 var game := GameState.new()
 var in_greenhouse := false
+var donki_request: HTTPRequest
+var donki_loading := false
+var donki_status := "NASA DONKI: loading"
 
 @onready var artwork: TextureRect = $Artwork
 @onready var placeholder: Label = $Placeholder
@@ -65,6 +68,7 @@ func _ready() -> void:
 	)
 	next_button.pressed.connect(func() -> void:
 		game.start_next_cycle()
+		_fetch_donki_flares()
 		_refresh()
 	)
 	reset_button.pressed.connect(func() -> void:
@@ -81,6 +85,11 @@ func _ready() -> void:
 	greenhouse_plant1_texture = _find_art(
 		greenhouse_plant1_texture, "res://assets/greenhouse_plant1.png"
 	)
+	donki_request = HTTPRequest.new()
+	donki_request.timeout = 8.0
+	add_child(donki_request)
+	donki_request.request_completed.connect(_on_donki_request_completed)
+	_fetch_donki_flares()
 	_refresh()
 
 
@@ -148,7 +157,7 @@ func _refresh() -> void:
 	shield_button.disabled = game.shielded
 	wait_button.visible = taking_actions
 	next_button.visible = game.storm_resolved and not fired
-	notice.text = game.notice
+	notice.text = "%s | %s" % [game.notice, donki_status]
 
 
 func _orbit_status() -> String:
@@ -171,6 +180,57 @@ func _crop_status(stage: int) -> String:
 	return "%s · Growing · %d days until harvest" % [
 		crop["name"], int(crop["grow_days"]) - game.crop_age
 	]
+
+
+func _fetch_donki_flares() -> void:
+	if donki_request == null or donki_loading:
+		return
+	var now := int(Time.get_unix_time_from_system())
+	var end_date := Time.get_date_string_from_unix_time(now)
+	var start_date := Time.get_date_string_from_unix_time(now - 30 * 24 * 60 * 60)
+	var url := "https://ccmc.gsfc.nasa.gov/DONKI-API/get/FLR?startDate=%s&endDate=%s" % [
+		start_date, end_date
+	]
+	donki_loading = true
+	donki_status = "NASA DONKI: contacting"
+	donki_request.request(url)
+
+
+func _on_donki_request_completed(
+	result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray
+) -> void:
+	donki_loading = false
+	if result != HTTPRequest.RESULT_SUCCESS or response_code < 200 or response_code >= 300:
+		donki_status = "NASA DONKI unavailable; offline forecast"
+		_refresh()
+		return
+	var parsed: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if not parsed is Array or parsed.is_empty():
+		donki_status = "NASA DONKI: no recent flares; offline forecast"
+		_refresh()
+		return
+	var strongest_class := ""
+	for event in parsed:
+		if not event is Dictionary:
+			continue
+		var class_type := str(event.get("classType", "")).to_upper()
+		if _flare_rank(class_type) > _flare_rank(strongest_class):
+			strongest_class = class_type
+	if strongest_class == "":
+		donki_status = "NASA DONKI: no usable flare data; offline forecast"
+	else:
+		game.set_nasa_flare_class(strongest_class)
+		donki_status = "NASA DONKI: %s" % strongest_class
+	_refresh()
+
+
+func _flare_rank(class_type: String) -> float:
+	if class_type.length() < 2:
+		return -1.0
+	var multiplier: float = float({"A": 0.01, "B": 0.1, "C": 1.0, "M": 10.0, "X": 100.0}.get(
+		class_type.substr(0, 1), 0.0
+	))
+	return multiplier * class_type.substr(1).to_float()
 
 
 func _find_art(assigned: Texture2D, path: String) -> Texture2D:
