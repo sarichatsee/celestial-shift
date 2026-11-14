@@ -9,8 +9,10 @@ science? The real record decides what happened, and the debrief shows the
 real dates.
 
 It grew out of the **Orbit 27 controls prototype** and keeps its look: the
-full-screen artwork, two rooms on keys **1** and **2** (**Base**, a view of
-the Moon base, and **Greenhouse**), the top bar and the bottom bar. The rules, levels, storm data,
+full-screen artwork, the top bar and the bottom bar. The main view is the
+Moon base. Click a building to open its card: what it does, its meter, and
+the same control as the bottom bar. The greenhouse card has **Look inside**
+(key **2**; **1** or **Esc** goes back). The rules, levels, storm data,
 debrief and Science page come from the browser build on the
 `lunar-night-shift` branch.
 
@@ -53,9 +55,9 @@ yours into `assets/`:
 
 | File | When shown |
 | --- | --- |
-| `moon_base.png` | Optional. Replaces the drawn Moon base with a still picture (which no longer shows the game state) |
-| `greenhouse_plant0.png` | Greenhouse room, greenhouse switched off |
-| `greenhouse_plant1.png` | Greenhouse room, greenhouse switched on |
+| `moon_base.png` | Optional. Replaces the drawn Moon base with a still picture (which no longer shows the game state). Keep the buildings where the drawing has them, or move the click areas in `PART_RECTS` in `main.gd` |
+| `greenhouse_plant0.png` | Inside the greenhouse, switched off |
+| `greenhouse_plant1.png` | Inside the greenhouse, switched on |
 
 You can also select the root node in `main.tscn` and assign the three
 textures in the Inspector. Inspector assignments take priority. The images

@@ -57,21 +57,13 @@ anchor_right = 1.0
 offset_bottom = 74.0
 color = Color(0.035, 0.055, 0.06, 0.96)
 
-[node name="Base" type="Button" parent="TopBar"]
+[node name="Back" type="Button" parent="TopBar"]
+visible = false
 offset_left = 24.0
 offset_top = 16.0
-offset_right = 139.0
+offset_right = 280.0
 offset_bottom = 58.0
-toggle_mode = true
-text = "1  Base"
-
-[node name="Greenhouse" type="Button" parent="TopBar"]
-offset_left = 151.0
-offset_top = 16.0
-offset_right = 321.0
-offset_bottom = 58.0
-toggle_mode = true
-text = "2  Greenhouse"
+text = "<  Back to the base"
 
 [node name="DoseLabel" type="Label" parent="TopBar"]
 offset_left = 372.0

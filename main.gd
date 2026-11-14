@@ -24,6 +24,19 @@ const MoonBaseView = preload("res://moon_base_view.gd")
 const AIR_LOW_PCT := 30.0  # the Air meter warns under this
 const DOSE_HIGH := 60.0  # same line as the "radiation is high" tip
 const STEPPERS := ["life_support", "shield", "science", "charge"]
+## The buildings of the Moon base that open a card when clicked, and where each
+## one is on the 1280 x 720 canvas (moon_base_view.gd draws them there). The
+## areas are bigger than the drawings so they are easy to hit.
+const PARTS := ["solar", "battery", "science", "base", "shelter", "greenhouse", "water"]
+const PART_RECTS := {
+	"solar": Rect2(42, 356, 272, 102),
+	"battery": Rect2(340, 362, 88, 96),
+	"science": Rect2(432, 330, 120, 128),
+	"base": Rect2(596, 296, 208, 162),
+	"shelter": Rect2(850, 366, 96, 92),
+	"greenhouse": Rect2(960, 374, 174, 84),
+	"water": Rect2(1138, 348, 56, 110),
+}
 
 ## Optional picture of the Moon base. Without one the base is drawn in code
 ## (moon_base_view.gd) and shows the game state.
@@ -34,7 +47,8 @@ const STEPPERS := ["life_support", "shield", "science", "charge"]
 var T: Dictionary = GameText.TEXT
 var game := GameState.new()
 var screen := "title"  # "title", "intro", "game", "debrief" or "science"
-var in_greenhouse := false
+var in_greenhouse := false  # looking inside the greenhouse
+var open_part := ""  # the building whose card is open, or ""
 
 var plan: Dictionary = GameState.new_plan()  # the player's plan for this turn (not sent yet)
 var choice := ""  # on an alert turn: "" (not chosen yet), "shelter" or "stay"
@@ -71,6 +85,12 @@ var power_note: Label
 var end_turn_button: Button
 var sound_button: Button
 var base_view: MoonBaseView
+var click_hint: Label
+var part_card: PanelContainer
+var part_card_box: VBoxContainer
+var _hotspots := {}
+var _card_updates: Array[Callable] = []
+var _card_wide := 430.0
 var overlay: Control
 var overlay_card: PanelContainer
 var overlay_scroll: ScrollContainer
@@ -85,8 +105,7 @@ var _steppers := {}
 @onready var hud: Label = $TopBar/HUD
 @onready var dose_label: Label = $TopBar/DoseLabel
 @onready var dose_bar: ProgressBar = $TopBar/DoseBar
-@onready var base_button: Button = $TopBar/Base
-@onready var greenhouse_button: Button = $TopBar/Greenhouse
+@onready var back_button: Button = $TopBar/Back
 @onready var bottom_bar: ColorRect = $BottomBar
 @onready var room_status: Label = $BottomBar/RoomStatus
 @onready var tools: HBoxContainer = $BottomBar/Tools
@@ -100,10 +119,13 @@ func _ready() -> void:
 	greenhouse_plant0_texture = _find_art(greenhouse_plant0_texture, "res://assets/greenhouse_plant0.png")
 	greenhouse_plant1_texture = _find_art(greenhouse_plant1_texture, "res://assets/greenhouse_plant1.png")
 
-	base_button.text = _t("rooms.base")
-	greenhouse_button.text = _t("rooms.greenhouse")
-	base_button.pressed.connect(_show_room.bind(false))
-	greenhouse_button.pressed.connect(_show_room.bind(true))
+	back_button.text = _t("rooms.back")
+	back_button.pressed.connect(_show_room.bind(false))
+	click_hint = Kit.label(_t("rooms.click_hint"), 16, Kit.C_MUTED)
+	click_hint.position = Vector2(24, 0)
+	click_hint.size = Vector2(330, 74)
+	click_hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	top_bar.add_child(click_hint)
 	dose_bar.add_theme_stylebox_override("background", Kit.flat(Kit.C_WELL, 6, Kit.C_LINE, 1))
 	dose_bar.add_theme_stylebox_override("fill", Kit.flat(Kit.C_DANGER, 6))
 
@@ -111,9 +133,11 @@ func _ready() -> void:
 	add_child(sound)
 
 	_build_base_view()
+	_build_hotspots()
 	_build_meters()
 	_build_alert()
 	_build_report()
+	_build_part_card()
 	_build_actions()
 	_build_overlay()
 
@@ -133,7 +157,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_1:
 			_show_room(false)
 		KEY_2:
-			_show_room(true)
+			_show_room(true)  # look inside the greenhouse
+		KEY_ESCAPE:
+			if open_part != "":
+				_close_part()
+			elif in_greenhouse:
+				_show_room(false)
+			else:
+				return
 		_:
 			return
 	get_viewport().set_input_as_handled()
@@ -424,6 +455,9 @@ func _set_game_visible(showing: bool) -> void:
 	bottom_bar.visible = showing
 	meters_panel.visible = showing
 	if not showing:
+		_close_part()
+		for key in _hotspots:
+			(_hotspots[key] as Button).visible = false
 		alert_panel.visible = false
 		report_panel.visible = false
 
@@ -562,6 +596,283 @@ func _show_science() -> void:
 	_focus(back_button)
 
 
+# ---------------------------------------------------------------- the buildings and their cards
+## An invisible button over each building. A button gives hover, keyboard focus
+## and Enter for free; the outline shows which building is open.
+func _build_hotspots() -> void:
+	var place := base_view.get_index() + 1
+	for key in PARTS:
+		var area: Rect2 = PART_RECTS[key]
+		var spot := Button.new()
+		spot.toggle_mode = true
+		spot.position = area.position
+		spot.size = area.size
+		spot.tooltip_text = _t("rooms.labels." + key)
+		spot.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var open_look := Kit.flat(Color(1.0, 0.82, 0.29, 0.1), 10, Kit.C_SUN, 3)
+		spot.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+		spot.add_theme_stylebox_override("disabled", StyleBoxEmpty.new())
+		spot.add_theme_stylebox_override("hover", Kit.flat(Color(1, 1, 1, 0.07), 10, Kit.C_SUN, 2))
+		spot.add_theme_stylebox_override("pressed", open_look)
+		spot.add_theme_stylebox_override("hover_pressed", open_look)
+		spot.add_theme_stylebox_override("focus", Kit.flat(Color(0, 0, 0, 0), 10, Color.WHITE, 2))
+		spot.visible = false
+		spot.pressed.connect(_toggle_part.bind(key))
+		add_child(spot)
+		move_child(spot, place)
+		place += 1
+		_hotspots[key] = spot
+
+
+func _build_part_card() -> void:
+	part_card = PanelContainer.new()
+	# solid, because a card can sit over the alert box
+	part_card.add_theme_stylebox_override("panel", Kit.flat(Color(Kit.C_BAR, 1.0), 10, Kit.C_SUN, 2, 14))
+	part_card.visible = false
+	add_child(part_card)
+	part_card_box = Kit.vbox(8)
+	part_card.add_child(part_card_box)
+
+
+## The greenhouse and the water tank arrive on Level 2.
+func _part_exists(key: String) -> bool:
+	return game.has_food() or not (key in ["greenhouse", "water"])
+
+
+func _toggle_part(key: String) -> void:
+	if open_part == key:
+		_close_part()
+		sound.play("click")
+		_refresh()
+	else:
+		_open_part(key)
+
+
+func _close_part() -> void:
+	open_part = ""
+	_card_updates.clear()
+	if part_card != null:
+		part_card.visible = false
+
+
+## Open the card of one building: what it is for, its meter, and the same
+## control as the bottom bar. The card changes the same plan; nothing is hidden
+## in it that the bottom bar and the meters do not also show.
+func _open_part(key: String) -> void:
+	if screen != "game" or in_greenhouse or not _part_exists(key):
+		return
+	open_part = key
+	_card_updates.clear()
+	for child in part_card_box.get_children():
+		part_card_box.remove_child(child)
+		child.queue_free()
+
+	var head := Kit.hbox(10)
+	var title := Kit.label(_t("rooms.labels." + key), 22, Kit.C_SUN)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := Kit.button(_t("rooms.close"), Kit.TAP)
+	close.pressed.connect(_toggle_part.bind(key))
+	head.add_child(close)
+	part_card_box.add_child(head)
+
+	var wide := 430.0
+	_card_wide = wide
+	match key:
+		"solar":
+			_card_words(_t("rooms.about.solar", {"solar": _n("SOLAR_POWER")}))
+		"battery":
+			_card_words(_t("rooms.about.battery", {"max": _n("BATTERY_MAX")}))
+			_card_meter(part_card_box, "battery", Kit.C_SUN)
+			_card_stepper(part_card_box, "charge")
+		"science":
+			_card_words(_t("rooms.about.science"))
+			var stars := Kit.label("", 17)
+			part_card_box.add_child(stars)
+			_card_updates.append(func() -> void: stars.text = _t("rooms.stars_so_far", {"stars": game.stars}))
+			_card_stepper(part_card_box, "science")
+		"base":
+			wide = 640.0
+			_card_wide = wide
+			_card_words(_t("rooms.about.base"))
+			var columns := Kit.hbox(24)
+			part_card_box.add_child(columns)
+			var air_side := Kit.vbox(8)
+			air_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			columns.add_child(air_side)
+			_card_meter(air_side, "air", Kit.C_GOOD)
+			_card_stepper(air_side, "life_support")
+			var shield_side := Kit.vbox(8)
+			shield_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			columns.add_child(shield_side)
+			var shield_row := Kit.hbox(8)
+			shield_row.add_child(Kit.label(_t("meters.shield"), 17))
+			var dots := DotRow.new()
+			dots.on_color = Kit.C_STATUS
+			shield_row.add_child(dots)
+			var shield_words := Kit.label("", 14, Kit.C_MUTED)
+			shield_row.add_child(shield_words)
+			shield_side.add_child(shield_row)
+			_card_updates.append(func() -> void:
+				dots.set_dots(game.shield, _n("MAX_SHIELD"))
+				shield_words.text = shield_note.text)
+			_card_stepper(shield_side, "shield")
+		"shelter":
+			wide = 640.0
+			_card_wide = wide
+			_card_words(_t("rooms.about.shelter", {"cost": _n("SHELTER_COST")}))
+			var quiet := Kit.label(_t("rooms.no_alert"), 17, Kit.C_MUTED)
+			part_card_box.add_child(quiet)
+			# on an alert turn the card repeats the whole alert, because it can
+			# sit over the alert box: class, chance, stakes and the two answers
+			var flare := Kit.label("", 18, Kit.C_SUN)
+			part_card_box.add_child(flare)
+			var odds := Kit.hbox(10)
+			var odds_dots := DotRow.new()
+			odds.add_child(odds_dots)
+			var odds_words := Kit.label("", 16)
+			odds.add_child(odds_words)
+			part_card_box.add_child(odds)
+			var stakes := Kit.label("", 16)
+			part_card_box.add_child(stakes)
+			var choices := Kit.hbox(10)
+			var shelter_copy := Kit.button("", 0)
+			shelter_copy.toggle_mode = true
+			shelter_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			shelter_copy.pressed.connect(_choose.bind("shelter"))
+			var stay_copy := Kit.button("", 0)
+			stay_copy.toggle_mode = true
+			stay_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			stay_copy.pressed.connect(_choose.bind("stay"))
+			choices.add_child(shelter_copy)
+			choices.add_child(stay_copy)
+			part_card_box.add_child(choices)
+			_card_updates.append(func() -> void:
+				var alert_now := game.alert_for_turn()
+				var alert_up := not alert_now.is_empty()
+				quiet.visible = not alert_up
+				for part in [flare, odds, stakes, choices]:
+					(part as Control).visible = alert_up
+				if alert_up:
+					flare.text = alert_title.text
+					odds_dots.set_dots(int(alert_now["dots"]), 10)
+					odds_words.text = alert_chance.text
+				stakes.text = alert_stakes.text
+				shelter_copy.text = shelter_button.text
+				stay_copy.text = stay_button.text
+				shelter_copy.set_pressed_no_signal(choice == "shelter")
+				stay_copy.set_pressed_no_signal(choice == "stay"))
+		"greenhouse":
+			_card_words(_t("rooms.about.greenhouse") + " " + _t("controls.hints.greenhouse"))
+			_card_words(_t("controls.greenhouse_cost") + ".", 15, Kit.C_MUTED)
+			_card_meter(part_card_box, "food", Kit.C_FOOD)
+			var row := Kit.hbox(10)
+			var toggle := Kit.button("", 120)
+			toggle.toggle_mode = true
+			toggle.pressed.connect(_toggle_greenhouse)
+			row.add_child(toggle)
+			var inside := Kit.button(_t("rooms.look_inside"), 150)
+			inside.pressed.connect(_show_room.bind(true))
+			row.add_child(inside)
+			part_card_box.add_child(row)
+			_card_updates.append(func() -> void:
+				toggle.text = greenhouse_toggle.text
+				toggle.set_pressed_no_signal(bool(plan["greenhouse"])))
+		"water":
+			_card_words(_t("rooms.about.water", {
+				"used": _n("WATER_USED"), "more": _n("WATER_USED_NO_RECYCLER"), "needed": _n("LS_NEEDED"),
+			}))
+			_card_meter(part_card_box, "water", Kit.C_WATER)
+			var recycler := Kit.label("", 16)
+			part_card_box.add_child(recycler)
+			_card_updates.append(func() -> void:
+				var on: bool = int(plan["life_support"]) >= _n("LS_NEEDED")
+				recycler.text = _t("meters.recycler_on") if on else _t("meters.recycler_off")
+				recycler.add_theme_color_override("font_color", Kit.C_GOOD if on else Kit.C_WARN))
+
+	part_card.custom_minimum_size = Vector2(wide, 0)
+	part_card.modulate.a = 0.0  # shown once it has been measured and placed
+	part_card.visible = true
+	sound.play("click")
+	_refresh()
+	_place_part_card(key)
+	_focus(close)
+
+
+## Put the card just above its building, clear of the meters panel on the left.
+## Wrapped text only knows its height after a frame or two, so measure then.
+func _place_part_card(key: String) -> void:
+	var area: Rect2 = PART_RECTS[key]
+	for pass_number in 3:
+		await get_tree().process_frame
+		await get_tree().process_frame
+		if open_part != key:
+			return
+		part_card.reset_size()
+		var card: Vector2 = part_card.size
+		part_card.position = Vector2(
+			clampf(area.get_center().x - card.x / 2.0, 390.0, maxf(390.0, 1256.0 - card.x)),
+			maxf(84.0, area.position.y - card.y - 10.0))
+		part_card.modulate.a = 1.0
+
+
+## A line of words in the open card.
+func _card_words(words: String, font_size: int = 17, color: Color = Kit.C_TEXT) -> void:
+	var line := Kit.label(words, font_size, color, true)
+	line.custom_minimum_size.x = _card_wide - 30.0
+	part_card_box.add_child(line)
+
+
+## A copy of one meter from the meters panel, kept in step with it.
+func _card_meter(into: Container, key: String, color: Color) -> void:
+	var row := Kit.hbox(8)
+	var name_label := Kit.label(_t("meters." + key), 17)
+	name_label.custom_minimum_size = Vector2(70, 0)
+	var bar := Kit.meter(color)
+	var value_label := Kit.label("", 17)
+	value_label.custom_minimum_size = Vector2(66, 0)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(name_label)
+	row.add_child(bar)
+	row.add_child(value_label)
+	into.add_child(row)
+	_card_updates.append(func() -> void:
+		var main_bar: ProgressBar = _meters[key]["bar"]
+		bar.max_value = main_bar.max_value
+		bar.value = main_bar.value
+		value_label.text = (_meters[key]["value"] as Label).text)
+
+
+## A copy of one bottom-bar control: the same plan, the same limits.
+func _card_stepper(into: Container, key: String) -> void:
+	var row := Kit.hbox(6)
+	var name_label := Kit.label(_t("controls." + key), 16, Kit.C_STATUS)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var minus := Kit.button("-", Kit.TAP)
+	var plus := Kit.button("+", Kit.TAP)
+	for step_button in [minus, plus]:
+		step_button.add_theme_font_size_override("font_size", 26)
+	var value := Kit.label("0", 26)
+	value.custom_minimum_size = Vector2(40, Kit.TAP)
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	minus.pressed.connect(_step.bind(key, -1))
+	plus.pressed.connect(_step.bind(key, 1))
+	row.add_child(name_label)
+	row.add_child(minus)
+	row.add_child(value)
+	row.add_child(plus)
+	into.add_child(row)
+	var note := Kit.label("", 14, Kit.C_MUTED, true)
+	into.add_child(note)
+	_card_updates.append(func() -> void:
+		var main_stepper: Dictionary = _steppers[key]
+		value.text = (main_stepper["value"] as Label).text
+		minus.disabled = (main_stepper["minus"] as Button).disabled
+		plus.disabled = (main_stepper["plus"] as Button).disabled
+		note.text = _control_hint(key))
+
+
 # ---------------------------------------------------------------- the plan
 ## Power still needed to finish the shield (so the player can't pour power into a full one).
 func _shield_room() -> int:
@@ -669,6 +980,8 @@ func _show_room(show_greenhouse: bool) -> void:
 	if screen != "game":
 		return
 	in_greenhouse = show_greenhouse and game.has_food()
+	if in_greenhouse:
+		_close_part()
 	_refresh()
 
 
@@ -714,10 +1027,8 @@ func _refresh() -> void:
 	dose_label.text = _t("hud.radiation", {"dose": _num(game.dose), "limit": _n("DOSE_LIMIT")})
 	dose_bar.max_value = float(_n("DOSE_LIMIT"))
 	dose_bar.value = game.dose
-	base_button.set_pressed_no_signal(not in_greenhouse)
-	greenhouse_button.set_pressed_no_signal(in_greenhouse)
-	greenhouse_button.disabled = not with_food
-	greenhouse_button.text = _t("rooms.greenhouse") + ("  " + _t("meters.new") if is_new else "")
+	back_button.visible = in_greenhouse
+	click_hint.visible = not in_greenhouse
 
 	# meters
 	_set_meter("battery", game.battery, float(_n("BATTERY_MAX")),
@@ -809,6 +1120,16 @@ func _refresh() -> void:
 		stay_button.set_pressed_no_signal(choice == "stay")
 		alert_panel.reset_size.call_deferred()
 
+	# the buildings, and the card of the one that is open
+	if open_part != "" and (in_greenhouse or not _part_exists(open_part)):
+		_close_part()
+	for key in _hotspots:
+		var spot: Button = _hotspots[key]
+		spot.visible = not in_greenhouse and _part_exists(key)
+		spot.set_pressed_no_signal(open_part == key)
+	for update in _card_updates:
+		update.call()
+
 	_refresh_art()
 
 
@@ -840,6 +1161,10 @@ func _base_view_state() -> Dictionary:
 	if with_food:
 		greenhouse = "on" if (playing and bool(plan["greenhouse"])) else "off"
 	var life_support_ok: bool = not playing or int(plan["life_support"]) >= _n("LS_NEEDED")
+	var labels: Dictionary = T["rooms"]["labels"].duplicate()
+	if playing and with_food and hint == _t("messages.new_meters"):
+		for key in ["greenhouse", "water"]:
+			labels[key] = str(labels[key]) + "  " + _t("meters.new")
 	return {
 		"is_day": game.is_day() if screen in ["game", "intro", "debrief"] else true,
 		"battery": game.battery / float(_n("BATTERY_MAX")),
@@ -855,7 +1180,7 @@ func _base_view_state() -> Dictionary:
 		"water": float(game.water) / float(_n("WATER_START")) if with_food else -1.0,
 		"recycler_on": life_support_ok,
 		"alert": str(alert.get("cls", "")),
-		"labels": T["rooms"]["labels"],
+		"labels": labels,
 	}
 
 
@@ -902,6 +1227,7 @@ func _begin_level() -> void:
 	last_control = ""
 	science_before_shelter = 0
 	in_greenhouse = false
+	_close_part()
 	if game.has_food() and not new_meters_seen:
 		hint = _t("messages.new_meters")
 		new_meters_seen = true
@@ -935,6 +1261,7 @@ func _end_turn() -> void:
 		cue = "shelter" if bool(report["sheltered"]) else "storm_hit"
 	if not game.alert_for_turn().is_empty():
 		in_greenhouse = false  # look at the Sun
+		_close_part()  # the alert box needs the space
 		if cue == "click":
 			cue = "alert"
 	sound.play(cue)
