@@ -936,6 +936,126 @@ for (const row of PARITY) {
   });
 }
 
+// ---------------------------------------------------------------- words and page (sections 6.1, 6.5, 8, 11)
+group("text and page");
+
+const ALL_FILES = ["data.js", "text.js", "storms.js", "game.js"];
+const read = (file) => fs.readFileSync(path.join(GAME, file), "utf8");
+const dig = (obj, dotted) => dotted.split(".").reduce((o, k) => (o === undefined || o === null ? undefined : o[k]), obj);
+
+test("text.js has every key the handover lists (section 6.5)", () => {
+  const T = loadGame({ files: ALL_FILES }).TEXT;
+  const need = {
+    title: ["name", "howTo", "start", "science", "disclaimer"],
+    meters: ["battery", "air", "water", "food", "radiation", "shield", "stars", "recyclerOn", "recyclerOff", "day", "night", "turn"],
+    controls: ["lifeSupport", "shield", "science", "charge", "chargeDayOnly", "greenhouse", "greenhouseCost", "endTurn", "powerLeft", "mute"],
+    alert: ["title", "chance", "shelter", "stay"],
+    messages: ["negative", "lsMax", "noChargeNight", "noScienceShelter", "noAlert", "shieldFull", "noGreenhouse", "notEnoughPower", "nightHint", "newMeters"],
+    tips: ["lostAir", "lostDose", "lostFood", "lostWater", "highDose", "default"],
+    debrief: ["won", "lost", "why", "stormCard", "followedYes", "followedNo", "sheltered", "stayed", "causedBy",
+      "recyclerSaved", "batteryChart", "moonChart", "moonChartNote", "reflection", "next", "retry", "again"],
+    live: ["heading", "liveLabel", "savedLabel", "bigFlares", "latest", "particleStorms", "quiet", "busy", "veryBusy"],
+    science: ["heading", "intro", "rows", "datasets", "credits", "disclaimer"]
+  };
+  for (const section of Object.keys(need)) {
+    for (const key of need[section]) assert.ok(T[section][key] !== undefined, section + "." + key);
+  }
+  assert.strictEqual(T.title.howTo.length, 3);
+  assert.strictEqual(T.levels.length, 4);
+  for (const level of T.levels) assert.ok(level.name && level.intro);
+  for (const reason of ["air", "dose", "food", "water"]) assert.ok(T.debrief.why[reason]);
+  for (const row of T.science.rows) assert.ok(row.game && row.real && typeof row.verified === "boolean");
+  for (const set of T.science.datasets) assert.ok(set.name && set.url && set.why);
+});
+
+test("with text.js loaded, the engine speaks the same words (messages and tips)", () => {
+  const bare = loadGame();
+  const worded = loadGame({ files: ALL_FILES });
+  bare.Engine.startGame(); worded.Engine.startGame();
+  const bad = [plan({ lifeSupport: -1 }), plan({ lifeSupport: 6 }), plan({ shelter: true, science: 1 }),
+    plan({ lifeSupport: 3, shelter: true }), plan({ lifeSupport: 3, greenhouse: true }), plan({ lifeSupport: 5, science: 9 })];
+  for (const pl of bad) assert.strictEqual(worded.Engine.checkPlan(pl), bare.Engine.checkPlan(pl));
+  assert.strictEqual(worded.Engine.getDebrief().tip, bare.Engine.getDebrief().tip);
+  assert.strictEqual(worded.Engine.getLevelInfo().name, "First Night");
+});
+
+test("the numbers written in the words match data.js", () => {
+  const LNS = loadGame({ files: ALL_FILES });
+  const T = LNS.TEXT, N = LNS.NUMBERS;
+  const has = (str, n) => assert.ok(new RegExp("(^|[^0-9.])" + String(n).replace(".", "\\.") + "([^0-9]|$)").test(str), str + " should say " + n);
+  has(T.messages.lsMax, N.LS_MAX);
+  has(T.tips.lostFood, N.GREENHOUSE_DAY); has(T.tips.lostFood, N.GREENHOUSE_NIGHT);
+  has(T.tips.lostWater, N.LS_NEEDED);
+  has(T.controls.greenhouseCost, N.GREENHOUSE_DAY); has(T.controls.greenhouseCost, N.GREENHOUSE_NIGHT);
+  has(T.controls.hints.lifeSupport, N.LS_NEEDED);
+  has(T.controls.hints.shield, N.SHIELD_COST);
+  has(T.controls.hints.charge, N.CHARGE_EFFICIENCY);
+  has(T.controls.hints.greenhouse, N.FOOD_PER_GREENHOUSE); has(T.controls.hints.greenhouse, N.GREENHOUSE_WATER);
+  has(T.title.howTo[0], N.SOLAR_POWER);
+  has(T.levels[0].intro, N.SOLAR_POWER); has(T.levels[0].intro, N.DAY_TURNS);
+  has(T.levels[1].intro, N.FOOD_START); has(T.levels[1].intro, N.FOOD_EATEN);
+  has(T.debrief.why.won, N.TURNS_PER_LEVEL);
+  // the storm odds on the Science page are the saved counts
+  const odds = T.science.rows[1].real, c = LNS.STORMS.chance;
+  for (const n of [c.X.followed, c.X.total, c.M.followed, c.M.total]) has(odds, n);
+});
+
+test("index.html loads the scripts in order, as classic scripts, and nothing from another site", () => {
+  const html = read("index.html");
+  const scripts = [...html.matchAll(/<script\b([^>]*)>/g)].map((m) => m[1]);
+  const srcs = scripts.map((attrs) => (attrs.match(/src="([^"]+)"/) || [])[1]);
+  const order = ["data.js", "text.js", "storms.js", "game.js", "live.js", "sound.js", "base.js", "ui.js"];
+  same(srcs, order.filter((f) => srcs.indexOf(f) !== -1));
+  for (const f of ["data.js", "text.js", "storms.js", "game.js", "ui.js"]) assert.ok(srcs.indexOf(f) !== -1, f);
+  for (const attrs of scripts) assert.ok(!/type="module"/.test(attrs));
+  for (const src of srcs) assert.ok(fs.existsSync(path.join(GAME, src)), src);
+  const sheets = [...html.matchAll(/<link\b[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+  for (const href of sheets) assert.ok(fs.existsSync(path.join(GAME, href)), href);
+  // no CDNs, web fonts, trackers or remote images
+  assert.ok(!/(src|href)="(https?:)?\/\//.test(html));
+  for (const file of fs.readdirSync(GAME).filter((f) => /\.css$/.test(f))) {
+    assert.ok(!/@import|url\(\s*["']?(https?:)?\/\//.test(read(file)), file);
+  }
+});
+
+test("every data-t in index.html names real words in text.js", () => {
+  const T = loadGame({ files: ALL_FILES }).TEXT;
+  const keys = [...read("index.html").matchAll(/data-t="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(keys.length > 0);
+  for (const key of keys) assert.strictEqual(typeof dig(T, key), "string", key);
+});
+
+test("every T.x.y the screen code uses exists in text.js", () => {
+  const T = loadGame({ files: ALL_FILES }).TEXT;
+  for (const file of ["ui.js", "live.js", "sound.js", "base.js"]) {
+    if (!fs.existsSync(path.join(GAME, file))) continue;
+    for (const m of read(file).matchAll(/\bT\.([a-zA-Z]+(?:\.[a-zA-Z]+)*)/g)) {
+      assert.ok(dig(T, m[1]) !== undefined, file + " uses T." + m[1]);
+    }
+  }
+});
+
+test("only the engine reads the saved storm record (no peeking in the screen code)", () => {
+  for (const file of fs.readdirSync(GAME).filter((f) => /\.js$/.test(f))) {
+    if (file === "game.js" || file === "storms.js") continue;
+    const code = read(file).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");   // comments don't count
+    assert.ok(!/STORMS\s*\.\s*windows/.test(code), file + " must not read LNS.STORMS.windows");
+    // ui.js may show it for played turns (from getDebrief); text.js only has the words
+    if (file !== "ui.js" && file !== "text.js") assert.ok(!/followed/.test(code), file + " mentions `followed`");
+  }
+  const engine = read("game.js").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
+  assert.ok(!/document|window\.|querySelector/.test(engine), "game.js must not touch the DOM");
+  assert.ok(!/Math\.random|Date\.now|new Date\(\)/.test(engine), "the engine is deterministic");
+});
+
+test("honesty: the disclaimer is on the page, and no NASA logo is used", () => {
+  const T = loadGame({ files: ALL_FILES }).TEXT;
+  assert.strictEqual(T.title.disclaimer, "Not made or endorsed by NASA. Uses public NASA data.");
+  assert.ok(/data-t="title\.disclaimer"/.test(read("index.html")));
+  const all = fs.readdirSync(GAME).join(" ") + (fs.existsSync(path.join(GAME, "assets")) ? fs.readdirSync(path.join(GAME, "assets")).join(" ") : "");
+  assert.ok(!/nasa|meatball|insignia/i.test(all), "no NASA logo or insignia files");
+});
+
 // ---------------------------------------------------------------- report
 if (results.failed.length) {
   for (const f of results.failed) {

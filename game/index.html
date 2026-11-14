@@ -4,16 +4,63 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lunar Night Shift</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="base.css">
 </head>
 <body>
-<h1>Lunar Night Shift</h1>
-<p>The screen is not built yet. Level 1 is playable from the browser console:</p>
-<pre>
-LNS.Engine.startGame()
-LNS.Engine.getState()
-LNS.Engine.takeTurn({ lifeSupport: 3, shield: 0, science: 3, charge: 4, shelter: false, greenhouse: false })
-</pre>
+<noscript><p class="noscript">Lunar Night Shift needs JavaScript to run.</p></noscript>
+
+<main id="app">
+
+  <!-- The game screen. Every word is filled in from text.js by ui.js. -->
+  <section id="screen-game" class="screen" hidden>
+    <header class="topbar">
+      <h1 id="hdr-level" tabindex="-1"></h1>
+      <p id="hdr-turn" class="chip"></p>
+      <p id="hdr-phase" class="chip phase"></p>
+      <p id="hdr-dates" class="chip dates" hidden></p>
+    </header>
+
+    <div class="board">
+      <div id="meters" class="panel meters"></div>
+      <div class="panel picture">
+        <div id="base-picture" role="img"></div>
+      </div>
+    </div>
+
+    <div id="report" class="panel report" role="status" hidden></div>
+
+    <div class="panel controls">
+      <h2 id="controls-heading" data-t="controls.heading"></h2>
+      <div id="control-grid" class="control-grid"></div>
+      <div class="turnbar">
+        <p id="power-left" class="power-left"></p>
+        <p id="message" class="message" role="status"></p>
+        <button id="end-turn" class="btn primary" type="button" data-t="controls.endTurn"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- The debrief: after every level, win or loss. -->
+  <section id="screen-debrief" class="screen" hidden>
+    <div class="panel debrief">
+      <h1 id="debrief-headline" tabindex="-1"></h1>
+      <p id="debrief-why" class="why"></p>
+      <p id="debrief-score" class="score"></p>
+      <p id="debrief-tip" class="tip"></p>
+      <div id="debrief-buttons" class="button-row"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer"><p data-t="title.disclaimer"></p></footer>
+
 <script src="data.js"></script>
+<script src="text.js"></script>
+<script src="storms.js"></script>
 <script src="game.js"></script>
+<script src="base.js"></script>
+<script src="ui.js"></script>
 </body>
 </html>

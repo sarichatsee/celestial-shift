@@ -5,3 +5,4 @@ One line per session or milestone: date, tool, what it produced or changed.
 - 2026-11-14 · Claude Code (Opus 5.5) · Produced the balance simulator (`tools/balance_sim.py`), the 2024 storm extract (`tools/donki_alerts_2024.json`) and the handover brief (`HANDOVER.md`).
 - 2026-11-14 · Claude Fable 5.2 coding agent · M1: wrote `game/data.js` (numbers), `game/game.js` (rules engine, no DOM), `tests/run.js` (unit tests) and a console-play `game/index.html`.
 - 2026-11-14 · Claude Fable 5.2 coding agent · M2: wrote `tools/build_storms.py` (offline and online builds), generated `game/storms.js` from DONKI and RadLab, and added storm, no-peeking and simulator-parity tests.
+- 2026-11-14 · Claude Fable 5.2 coding agent · M3: wrote the game screen (`game/index.html`, `style.css`, `ui.js`), all on-screen words (`text.js`), a placeholder base picture (`base.js`, `base.css`) and text/page tests.

@@ -1,0 +1,222 @@
+/* style.css: layout, colours and animations for Lunar Night Shift.
+ * No web fonts, no images from other sites. The base picture has its own base.css. */
+
+:root {
+  --space: #0a0f24;
+  --panel: #161d3d;
+  --panel-2: #1f2850;
+  --line: #36407a;
+  --text: #f4f6ff;
+  --muted: #b9c0e6;
+  --sun: #ffd24a;
+  --ok: #63e296;
+  --warn: #ffb347;
+  --danger: #ff7d8f;
+  --water: #6ec6ff;
+  --ink: #0a0f24;
+  --radius: 14px;
+  --gap: 10px;
+  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--space);
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.35;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, p { margin: 0; }
+
+[hidden] { display: none !important; }
+
+#app {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--gap);
+}
+
+.screen { display: flex; flex-direction: column; gap: var(--gap); }
+
+.panel {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.noscript { padding: 24px; text-align: center; }
+
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 4px var(--gap) 10px;
+}
+
+/* ---------------------------------------------------------------- buttons */
+.btn {
+  font: inherit;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--text); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--sun); border-color: var(--sun); color: var(--ink); }
+.btn.primary:hover:not(:disabled) { border-color: #fff; }
+.btn.big { font-size: 20px; min-height: 54px; padding: 10px 26px; }
+
+:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+h1:focus { outline: none; }
+
+.button-row { display: flex; flex-wrap: wrap; gap: var(--gap); }
+
+/* ---------------------------------------------------------------- top bar */
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.topbar h1 { font-size: 22px; margin-right: auto; }
+.chip {
+  background: var(--panel-2);
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chip.phase.day { background: var(--sun); border-color: var(--sun); color: var(--ink); }
+.chip.phase.night { background: #2a1f5e; border-color: #8f7dff; }
+.chip.dates { font-weight: 400; color: var(--muted); }
+
+/* ---------------------------------------------------------------- meters and picture */
+.board { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: var(--gap); }
+
+.meters { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+
+.meter { display: grid; grid-template-columns: 26px 86px 1fr 58px; align-items: center; gap: 6px; min-height: 28px; }
+.meter-icon { font-size: 19px; text-align: center; }
+.meter-name { font-weight: 700; }
+.meter-value { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.meter-note { grid-column: 2 / -1; font-size: 14px; color: var(--muted); margin-top: -4px; }
+.meter-note.on::before { content: "● "; color: var(--ok); }
+.meter-note.off::before { content: "▲ "; color: var(--warn); }
+.meter-note.off { color: var(--warn); }
+
+.bar {
+  height: 18px;
+  background: #0d1330;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill { height: 100%; width: 0; border-radius: 999px; background: var(--ok); transition: width 0.35s ease; }
+.meter.battery .bar-fill { background: var(--sun); }
+.meter.water .bar-fill { background: var(--water); }
+.meter.food .bar-fill { background: #b6e36a; }
+/* radiation is striped as well as red, so it does not rely on colour alone */
+.meter.radiation .bar-fill {
+  background: repeating-linear-gradient(135deg, var(--danger) 0 8px, #d9506a 8px 16px);
+}
+.meter.low .bar { border-color: var(--warn); }
+.meter.low .meter-value::after { content: " !"; color: var(--warn); }
+.meter.low .meter-name { color: var(--warn); }
+.meter.low .bar { animation: pulse 1.2s ease-in-out infinite; }
+.meter.new { outline: 3px dashed var(--sun); outline-offset: 3px; border-radius: 8px; }
+
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(255, 179, 71, 0.35); } }
+
+.meter-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 28px; }
+.shield-pips { display: inline-flex; gap: 4px; vertical-align: middle; }
+.pip {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--muted); display: inline-block;
+}
+.pip.full { background: var(--muted); border-color: #fff; }
+.stat { font-weight: 700; }
+.stat .meter-icon { margin-right: 4px; }
+.stat small { font-weight: 400; color: var(--muted); font-size: 14px; }
+
+.picture { padding: 0; overflow: hidden; min-height: 230px; display: flex; }
+#base-picture { flex: 1; min-height: 230px; position: relative; }
+
+/* ---------------------------------------------------------------- last turn's report */
+.report { border-color: var(--water); padding: 8px 12px; }
+.report strong { margin-right: 6px; }
+.report.hit { border-color: var(--danger); }
+
+/* ---------------------------------------------------------------- controls */
+.controls h2 { font-size: 17px; margin-bottom: 8px; }
+.control-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: var(--gap); }
+
+.control {
+  background: var(--panel-2);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.control-name { font-weight: 700; }
+.control-name .meter-icon { margin-right: 4px; }
+.control-hint { font-size: 14px; color: var(--muted); min-height: 2.6em; }
+.control.disabled .control-name, .control.disabled .control-hint { opacity: 0.6; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper .btn { padding: 0; width: 44px; height: 44px; font-size: 24px; line-height: 1; }
+.stepper output {
+  min-width: 44px; text-align: center; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.switch { width: 100%; }
+.switch[aria-pressed="true"] { background: var(--ok); border-color: var(--ok); color: var(--ink); }
+
+.turnbar { display: flex; align-items: center; gap: var(--gap); margin-top: var(--gap); flex-wrap: wrap; }
+.power-left { font-size: 20px; font-weight: 700; white-space: nowrap; }
+.power-left small { font-size: 14px; font-weight: 400; color: var(--muted); }
+.power-left.over { color: var(--danger); }
+.message { flex: 1; min-width: 200px; min-height: 1.4em; font-weight: 700; }
+.message.problem { color: var(--warn); }
+.message.problem::before { content: "⚠ "; }
+.message.hint { color: var(--sun); }
+#end-turn { font-size: 20px; min-width: 150px; min-height: 50px; }
+
+/* ---------------------------------------------------------------- debrief */
+.debrief { display: flex; flex-direction: column; gap: 12px; max-width: 900px; margin: 0 auto; width: 100%; }
+.debrief h1 { font-size: 30px; }
+.debrief .why { font-size: 20px; }
+.debrief .score { color: var(--muted); white-space: pre-wrap; }
+.tip {
+  background: var(--panel-2);
+  border-left: 6px solid var(--sun);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.tip strong { color: var(--sun); margin-right: 6px; }
+
+/* ---------------------------------------------------------------- smaller screens */
+@media (max-width: 900px) {
+  .board { grid-template-columns: 1fr; }
+  .picture { order: -1; }
+}
+@media (max-width: 420px) {
+  .meter { grid-template-columns: 24px 76px 1fr 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
