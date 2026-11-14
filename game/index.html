@@ -30,6 +30,19 @@
 
     <div id="report" class="panel report" role="status" hidden></div>
 
+    <!-- Only on turns with a real flare alert. It shows the class, the date and the dots: never the outcome. -->
+    <div id="alert" class="panel alert" role="group" aria-labelledby="alert-title" hidden>
+      <div class="alert-text">
+        <h2 id="alert-title"></h2>
+        <p id="alert-when" class="alert-when"></p>
+        <p class="alert-chance"><span id="alert-dots" class="dots" role="img"></span> <span id="alert-chance"></span></p>
+      </div>
+      <div class="alert-choices">
+        <button id="btn-shelter" class="btn choice" type="button" aria-pressed="false"></button>
+        <button id="btn-stay" class="btn choice" type="button" aria-pressed="false"></button>
+      </div>
+    </div>
+
     <div class="panel controls">
       <h2 id="controls-heading" data-t="controls.heading"></h2>
       <div id="control-grid" class="control-grid"></div>
@@ -49,6 +62,13 @@
       <p id="debrief-score" class="score"></p>
       <p id="debrief-tip" class="tip"></p>
       <div id="debrief-buttons" class="button-row"></div>
+
+      <section id="debrief-storm-section" hidden>
+        <h2 data-t="debrief.stormsHeading"></h2>
+        <div id="debrief-storms" class="storm-cards"></div>
+      </section>
+
+      <p class="reflection">🤔 <span data-t="debrief.reflection"></span></p>
     </div>
   </section>
 

@@ -29,6 +29,8 @@
   var plan = null;             // the player's plan for the current turn (not sent yet)
   var hint = "";               // a one-off friendly message (night falls, new meters)
   var report = null;           // what happened on the turn just played
+  var choice = null;           // on an alert turn: null (not chosen yet), "shelter" or "stay"
+  var scienceBeforeShelter = 0;
   var newMetersSeen = false;   // the "New!" hint shows once
   var nodes = {};              // elements built once and updated on every render
 
@@ -120,6 +122,9 @@
   function carryPlanToNewTurn() {
     var st = E.getState();
     plan.shelter = false;
+    choice = null;
+    if (scienceBeforeShelter) plan.science = scienceBeforeShelter;   // sheltering paused the science
+    scienceBeforeShelter = 0;
     if (!st.isDay) plan.charge = 0;
     plan.shield = Math.min(plan.shield, shieldRoom(st));
     if (!E.getLevelInfo().hasFood) plan.greenhouse = false;
@@ -137,6 +142,23 @@
     var next = Math.max(0, Math.min(maxFor(key, st), plan[key] + delta));
     if (next === plan[key]) return;
     plan[key] = next;
+    hint = "";
+    renderGame();
+  }
+
+  /** The player's answer to a storm alert. Sheltering stops science for the turn. */
+  function choose(what) {
+    if (!E.alertForTurn()) return;
+    if (what === "shelter" && !plan.shelter) {
+      scienceBeforeShelter = plan.science;
+      plan.science = 0;
+      plan.shelter = true;
+    } else if (what === "stay" && plan.shelter) {
+      plan.shelter = false;
+      plan.science = scienceBeforeShelter;
+      scienceBeforeShelter = 0;
+    }
+    choice = what;
     hint = "";
     renderGame();
   }
@@ -211,6 +233,8 @@
     nodes.greenhouse = { box: gh, button: sw, hint: ghHint };
 
     $("end-turn").addEventListener("click", endTurn);
+    $("btn-shelter").addEventListener("click", function () { choose("shelter"); });
+    $("btn-stay").addEventListener("click", function () { choose("stay"); });
   }
 
   // ---------------------------------------------------------------- drawing the game screen (every change)
@@ -230,6 +254,8 @@
     var spend = E.totalSpend(plan);
     var check = E.checkPlan(plan);
     var nightsLeft = st.turnsPerLevel - Math.max(st.turn, N.DAY_TURNS + 1) + 1;
+    var alertNow = E.alertForTurn();          // class, date and dots only: never the outcome
+    var needChoice = !!alertNow && choice === null;
 
     // top bar
     $("hdr-level").textContent = fmt(T.header.level, { n: st.level, name: info.name });
@@ -298,11 +324,13 @@
 
     var message = $("message");
     var problem = check !== "ok" ? check : "";
-    message.textContent = problem || hint;
-    message.className = "message" + (problem ? " problem" : hint ? " hint" : "");
-    $("end-turn").disabled = !!problem;
+    var friendly = needChoice ? T.alert.choose : hint;
+    message.textContent = problem || friendly;
+    message.className = "message" + (problem ? " problem" : friendly ? " hint" : "");
+    $("end-turn").disabled = !!problem || needChoice;
 
     renderReport();
+    renderAlert(alertNow);
 
     if (LNS.Base) {
       LNS.Base.update({
@@ -318,7 +346,7 @@
         sciencePowered: plan.science > 0 && !plan.shelter,
         greenhouse: info.hasFood ? (plan.greenhouse ? "on" : "off") : null,
         sheltering: !!plan.shelter,
-        alert: null,
+        alert: alertNow ? { cls: alertNow.cls } : null,
         ended: null
       });
     }
@@ -329,9 +357,50 @@
     box.hidden = !report;
     if (!report) return;
     box.textContent = "";
-    box.appendChild(el("strong", { text: T.report.heading + ":" }));
+    box.appendChild(el("strong", { text: T.report.heading + ": " }));
     box.appendChild(el("span", { text: report.text }));
     box.classList.toggle("hit", !!report.hit);
+  }
+
+  function renderAlert(alertNow) {
+    var box = $("alert");
+    box.hidden = !alertNow;
+    if (!alertNow) return;
+    $("alert-title").textContent = fmt(T.alert.title, { fullClass: alertNow.fullClass });
+    $("alert-when").textContent = fmt(T.alert.when, { date: fmtDate(alertNow.date) });
+    $("alert-chance").textContent = fmt(T.alert.chance, { dots: alertNow.dots });
+    var dots = $("alert-dots");
+    dots.textContent = "";
+    dots.setAttribute("aria-label", fmt(T.alert.dots, { dots: alertNow.dots }));
+    for (var i = 0; i < 10; i++) dots.appendChild(el("span", { "class": "dot" + (i < alertNow.dots ? " on" : "") }));
+    var shelter = $("btn-shelter");
+    var stay = $("btn-stay");
+    shelter.textContent = "🛖 " + fmt(T.alert.shelter, { cost: N.SHELTER_COST });
+    stay.textContent = "🏠 " + T.alert.stay;
+    shelter.setAttribute("aria-pressed", choice === "shelter" ? "true" : "false");
+    stay.setAttribute("aria-pressed", choice === "stay" ? "true" : "false");
+  }
+
+  /** What the saved record says about the turn that was just played. */
+  function buildReport(playedTurn) {
+    var storms = E.getDebrief().storms;
+    var card = storms.length ? storms[storms.length - 1] : null;
+    if (!card || card.turn !== playedTurn) return null;
+    var parts = [];
+    if (card.followed) {
+      var shownCausedIt = card.causes.some(function (c) { return c.link === card.link; });
+      if (shownCausedIt || !card.causes.length) {
+        parts.push(fmt(T.report.storm, { fullClass: card.fullClass }));
+      } else {
+        parts.push(T.report.stormOther);
+        parts.push(fmt(T.debrief.causedBy, { fullClass: card.causes[0].fullClass, date: fmtDate(card.causes[0].date) }));
+      }
+      parts.push(fmt(card.sheltered ? T.report.sheltered : T.report.stayed, { dose: show(card.dose) }));
+    } else {
+      parts.push(fmt(T.report.falseAlarm, { fullClass: card.fullClass }));
+      parts.push(card.sheltered ? T.report.shelteredNothing : T.report.stayedNothing);
+    }
+    return { text: parts.join(" "), hit: card.followed };
   }
 
   // ---------------------------------------------------------------- playing
@@ -339,6 +408,8 @@
     plan = freshPlan();
     report = null;
     hint = "";
+    choice = null;
+    scienceBeforeShelter = 0;
     if (E.getLevelInfo().hasFood && !newMetersSeen) {
       hint = T.messages.newMeters;
       newMetersSeen = true;
@@ -350,9 +421,11 @@
   function endTurn() {
     var sent = { lifeSupport: plan.lifeSupport, shield: plan.shield, science: plan.science, charge: plan.charge,
       shelter: plan.shelter, greenhouse: plan.greenhouse };
+    if (E.alertForTurn() && choice === null) return;       // the alert needs an answer first
+    var playedTurn = E.getState().turn;
     var result = E.takeTurn(sent);
     if (result.status === "invalid") { renderGame(); return; }
-    report = null;
+    report = buildReport(playedTurn);                      // after the turn: the record may be shown
     hint = "";
     if (result.status === "continue") {
       carryPlanToNewTurn();
@@ -376,7 +449,7 @@
       shield: st.shield, max: N.MAX_SHIELD });
     var tip = $("debrief-tip");
     tip.textContent = "";
-    tip.appendChild(el("strong", { text: "💡 " + T.debrief.tipHeading + ":" }));
+    tip.appendChild(el("strong", { text: "💡 " + T.debrief.tipHeading + ": " }));
     tip.appendChild(el("span", { text: d.tip }));
 
     var buttons = $("debrief-buttons");
@@ -390,7 +463,46 @@
     add(T.debrief.retry, lost, function () { E.retryLevel(); beginLevel(); });
     add(T.debrief.again, result.status === "game_won", function () { E.startGame(); beginLevel(); });
 
+    // the real flares of this level: only the turns that were played
+    var cards = $("debrief-storms");
+    cards.textContent = "";
+    $("debrief-storm-section").hidden = !E.getLevelInfo().hasStorms;
+    if (!d.storms.length) cards.appendChild(el("p", { text: T.debrief.noStormsPlayed }));
+    d.storms.forEach(function (card) { cards.appendChild(stormCard(card)); });
+
     showScreen("debrief", "debrief-headline");
+  }
+
+  function stormCard(card) {
+    var outcome = el("p", { "class": "outcome" }, [
+      el("strong", { text: (card.followed ? "☢️ " : "✅ ") + (card.followed ? T.debrief.followedYes : T.debrief.followedNo) }),
+      el("span", { text: (card.sheltered ? T.debrief.sheltered : T.debrief.stayed) + " " +
+        fmt(T.debrief.doseGain, { dose: show(card.dose) }) })
+    ]);
+    var node = el("article", { "class": "storm-card" + (card.followed ? " hit" : "") }, [
+      el("h3", { text: fmt(T.debrief.stormTurn, { turn: card.turn }) + " · " + card.fullClass }),
+      el("p", { "class": "real", text: fmt(T.debrief.stormCard, { date: fmtDate(card.date) }) }),
+      outcome
+    ]);
+    // The strongest flare of the turn is not always the one that sent the storm.
+    var others = card.causes.filter(function (cause) { return cause.link !== card.link; });
+    if (others.length === 1 && card.causes.length === 1) {
+      node.appendChild(el("p", { "class": "real", text: fmt(T.debrief.causedBy,
+        { fullClass: others[0].fullClass, date: fmtDate(others[0].date) }) }));
+      node.appendChild(donkiLink(others[0], T.debrief.stormLink));
+    } else if (others.length) {
+      node.appendChild(el("p", { "class": "real", text: T.debrief.causedByMany }));
+      node.appendChild(el("ul", { "class": "cause-list" }, card.causes.map(function (cause) {
+        return el("li", {}, [donkiLink(cause, T.debrief.stormLinkShort)]);
+      })));
+    }
+    node.appendChild(donkiLink(card, T.debrief.stormLink));
+    return node;
+  }
+
+  function donkiLink(flare, words) {
+    return el("a", { href: flare.link, target: "_blank", rel: "noopener",
+      text: fmt(words, { fullClass: flare.fullClass, date: fmtDate(flare.date) }) + " ↗" });
   }
 
   // ---------------------------------------------------------------- start

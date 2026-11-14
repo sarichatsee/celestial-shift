@@ -186,6 +186,8 @@ globalThis.LNS.TEXT = {
     stayed: "You stayed in the main base.",
     doseGain: "Radiation +{dose}",
     causedBy: "The storm came from the {fullClass} flare on {date}.",
+    causedByMany: "Storms followed these flares in the same two days:",
+    stormLinkShort: "{fullClass} flare, {date}",
     recyclerSaved: "Your recycler saved {n} water this level.",
     batteryChart: "Your battery, turn by turn",
     batteryChartNote: "Turns 1 to 7 are day. Turns 8 to 14 are night.",
