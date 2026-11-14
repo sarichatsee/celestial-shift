@@ -12,6 +12,32 @@
 
 <main id="app">
 
+  <!-- Title -->
+  <section id="screen-title" class="screen">
+    <div class="panel title-card">
+      <h1 id="title-name" tabindex="-1" data-t="title.name"></h1>
+      <p class="tagline" data-t="title.tagline"></p>
+      <ol id="title-howto" class="howto"></ol>
+      <div class="button-row">
+        <button id="btn-start" class="btn primary big" type="button" data-t="title.start"></button>
+        <button id="btn-science" class="btn big" type="button" data-t="title.science"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Level intro -->
+  <section id="screen-intro" class="screen" hidden>
+    <div class="panel intro-card">
+      <p id="intro-level" class="chip"></p>
+      <h1 id="intro-name" tabindex="-1"></h1>
+      <p id="intro-text" class="intro-text"></p>
+      <p id="intro-dates" class="intro-dates" hidden></p>
+      <div class="button-row">
+        <button id="btn-go" class="btn primary big" type="button" data-t="intro.go"></button>
+      </div>
+    </div>
+  </section>
+
   <!-- The game screen. Every word is filled in from text.js by ui.js. -->
   <section id="screen-game" class="screen" hidden>
     <header class="topbar">
@@ -68,7 +94,42 @@
         <div id="debrief-storms" class="storm-cards"></div>
       </section>
 
+      <section>
+        <h2 data-t="debrief.batteryChart"></h2>
+        <ol id="debrief-battery" class="chart"></ol>
+        <p class="chart-note" data-t="debrief.batteryChartNote"></p>
+      </section>
+
+      <section id="debrief-moon-section" hidden>
+        <h2 data-t="debrief.moonChart"></h2>
+        <ol id="debrief-moon" class="chart moon"></ol>
+        <p id="debrief-moon-note" class="chart-note"></p>
+      </section>
+
+      <p id="debrief-recycler" class="recycler-line" hidden></p>
+
       <p class="reflection">🤔 <span data-t="debrief.reflection"></span></p>
+    </div>
+  </section>
+
+  <!-- Science Behind It -->
+  <section id="screen-science" class="screen" hidden>
+    <div class="panel science">
+      <h1 id="science-heading" tabindex="-1" data-t="science.heading"></h1>
+      <p data-t="science.intro"></p>
+      <table id="science-table" class="science-table">
+        <thead><tr><th scope="col" data-t="science.gameColumn"></th><th scope="col" data-t="science.realColumn"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h2 data-t="science.datasetsHeading"></h2>
+      <ul id="science-datasets" class="datasets"></ul>
+      <h2 data-t="science.creditsHeading"></h2>
+      <ul id="science-credits"></ul>
+      <p id="science-saved" class="chart-note"></p>
+      <p class="chart-note" data-t="science.disclaimer"></p>
+      <div class="button-row">
+        <button id="btn-science-back" class="btn big" type="button" data-t="title.back"></button>
+      </div>
     </div>
   </section>
 

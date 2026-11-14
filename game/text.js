@@ -194,10 +194,15 @@ globalThis.LNS.TEXT = {
     moonChart: "Radiation measured at the Moon",
     // The numbers are per-turn means from NASA OSDR RadLab (LRO/CRaTER), checked against the API on 2026-11-14.
     moonChartNote: "Real measurements from the CRaTER instrument on NASA's Lunar Reconnaissance Orbiter. " +
-                   "Each bar shows how many times stronger than a quiet day. Saved on {date}.",
+                   "Each bar shows how many times stronger the radiation was than on a quiet day. " +
+                   "The game's storms follow DONKI's records, so the bars and the storm marks do not always match. " +
+                   "Saved on {date}.",
     moonTimes: "{n}×",
-    moonStorm: "storm",
+    moonStorm: "☢️ storm",
     moonHidden: "not played",
+    chartTurn: "Turn {turn}: {value}",
+    chartTurnStorm: "Turn {turn}: {value}, storm in the game",
+    chartTurnHidden: "Turn {turn}: not played",
     reflection: "What would you do differently next time?",
     next: "Next level",
     retry: "Try this level again",

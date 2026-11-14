@@ -89,6 +89,33 @@ h1:focus { outline: none; }
 
 .button-row { display: flex; flex-wrap: wrap; gap: var(--gap); }
 
+/* ---------------------------------------------------------------- title, intro, science */
+.title-card, .intro-card, .science {
+  max-width: 820px; width: 100%; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 14px; padding: 22px;
+}
+.title-card h1 { font-size: 44px; color: var(--sun); line-height: 1.1; }
+.tagline { font-size: 21px; }
+.howto { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 19px; }
+.howto li { background: var(--panel-2); border-radius: 10px; padding: 8px 12px; }
+.intro-card { margin-top: 4vh; }
+.intro-card h1 { font-size: 38px; color: var(--sun); }
+.intro-card .chip { align-self: flex-start; }
+.intro-text { font-size: 21px; }
+.intro-dates { font-size: 19px; color: var(--water); font-weight: 700; }
+
+.science h1 { font-size: 32px; }
+.science h2 { font-size: 21px; margin-top: 6px; }
+.science ul { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; }
+.science a { color: var(--water); font-weight: 700; }
+.science-table { width: 100%; border-collapse: collapse; }
+.science-table th, .science-table td {
+  text-align: left; vertical-align: top; padding: 8px 10px; border: 2px solid var(--line); width: 50%;
+}
+.science-table th { background: var(--panel-2); }
+.unverified { display: block; margin-top: 4px; font-size: 14px; color: var(--warn); }
+.unverified::before { content: "⏳ "; }
+
 /* ---------------------------------------------------------------- top bar */
 .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .topbar h1 { font-size: 22px; margin-right: auto; }
@@ -250,6 +277,29 @@ h1:focus { outline: none; }
 .storm-card .real { color: var(--muted); font-size: 15px; }
 .storm-card .outcome strong { display: block; }
 .storm-card a { color: var(--water); font-weight: 700; display: inline-block; padding: 10px 0; min-height: 44px; }
+/* bar charts: a list of turns, each with a number, a bar and a label */
+.chart {
+  list-style: none; margin: 0; padding: 8px 6px 6px;
+  display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px;
+  background: #0d1330; border: 2px solid var(--line); border-radius: 12px;
+}
+.chart li { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding-bottom: 2px; border-radius: 6px; }
+.chart li.night { background: rgba(143, 125, 255, 0.16); }
+.chart .col { height: 120px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.chart .col span { width: 70%; min-height: 3px; border-radius: 5px 5px 0 0; background: var(--sun); display: block; }
+.chart li.night .col span { background: #b3a6ff; }
+.chart .num { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chart .turn { font-size: 13px; color: var(--muted); }
+.chart .mark { font-size: 12px; min-height: 16px; white-space: nowrap; }
+.chart li.unplayed .col span { background: none; border: 2px dashed var(--line); min-height: 20px; }
+.chart.moon .col span { background: var(--water); }
+.chart.moon li.storm .col span {
+  background: repeating-linear-gradient(135deg, var(--danger) 0 6px, #d9506a 6px 12px);
+}
+.chart-note { color: var(--muted); font-size: 15px; margin-top: 6px; }
+.recycler-line { font-size: 19px; font-weight: 700; color: var(--water); }
+.recycler-line::before { content: "💧 "; }
+
 .cause-list { margin: 0; padding-left: 20px; }
 .cause-list a { padding: 6px 0; min-height: 0; }
 .reflection { font-size: 19px; font-weight: 700; color: var(--sun); }
@@ -258,6 +308,10 @@ h1:focus { outline: none; }
 @media (max-width: 900px) {
   .board { grid-template-columns: 1fr; }
   .picture { order: -1; }
+}
+@media (max-width: 560px) {
+  .chart .num, .chart .mark { font-size: 10px; }
+  .title-card h1 { font-size: 34px; }
 }
 @media (max-width: 420px) {
   .meter { grid-template-columns: 24px 76px 1fr 52px; }

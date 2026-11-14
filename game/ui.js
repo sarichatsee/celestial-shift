@@ -78,7 +78,7 @@
   }
 
   function showScreen(name, focusId) {
-    ["game", "debrief"].forEach(function (s) {
+    ["title", "intro", "game", "debrief", "science"].forEach(function (s) {
       var node = $("screen-" + s);
       if (node) node.hidden = s !== name;
     });
@@ -403,6 +403,61 @@
     return { text: parts.join(" "), hit: card.followed };
   }
 
+  // ---------------------------------------------------------------- title, intro, science
+  function showTitle() {
+    showScreen("title", "title-name");
+  }
+
+  function buildTitle() {
+    var list = $("title-howto");
+    T.title.howTo.forEach(function (line) { list.appendChild(el("li", { text: line })); });
+    $("btn-start").addEventListener("click", function () { E.startGame(); showIntro(); });
+    $("btn-science").addEventListener("click", function () { showScreen("science", "science-heading"); });
+    $("btn-science-back").addEventListener("click", showTitle);
+    $("btn-go").addEventListener("click", beginLevel);
+  }
+
+  /** One or two sentences before each level. Storm levels add their real dates. */
+  function showIntro() {
+    var st = E.getState();
+    var info = E.getLevelInfo();
+    $("intro-level").textContent = fmt(T.intro.level, { n: st.level, total: st.levelCount });
+    $("intro-name").textContent = info.name;
+    $("intro-text").textContent = T.levels[info.index].intro;
+    var dates = $("intro-dates");
+    dates.hidden = !info.hasStorms;
+    if (info.hasStorms) {
+      var first = info.turnDates(1).from;
+      var last = info.turnDates(st.turnsPerLevel).to;
+      dates.textContent = "📅 " + fmt(T.intro.realDates, {
+        from: fmtDate(first, { long: true, noYear: first.slice(0, 4) === last.slice(0, 4) }),
+        to: fmtDate(last, { long: true })
+      });
+    }
+    showScreen("intro", "intro-name");
+  }
+
+  function buildScience() {
+    var body = $("science-table").querySelector("tbody");
+    T.science.rows.forEach(function (row) {
+      var real = el("td", { text: row.real });
+      if (!row.verified) real.appendChild(el("span", { "class": "unverified", text: T.science.unverified }));
+      body.appendChild(el("tr", {}, [el("td", { text: row.game }), real]));
+    });
+    var sets = $("science-datasets");
+    T.science.datasets.forEach(function (set) {
+      sets.appendChild(el("li", {}, [
+        el("a", { href: set.url, target: "_blank", rel: "noopener", text: set.name + " ↗" }),
+        el("div", { text: set.why })
+      ]));
+    });
+    var credits = $("science-credits");
+    T.science.credits.forEach(function (line) { credits.appendChild(el("li", { text: line })); });
+    if (LNS.STORMS && LNS.STORMS.savedOn) {
+      $("science-saved").textContent = fmt(T.science.savedNote, { date: fmtDate(LNS.STORMS.savedOn) });
+    }
+  }
+
   // ---------------------------------------------------------------- playing
   function beginLevel() {
     plan = freshPlan();
@@ -459,9 +514,9 @@
       b.addEventListener("click", action);
       buttons.appendChild(b);
     }
-    if (result.status === "level_won") add(T.debrief.next, true, function () { E.nextLevel(); beginLevel(); });
+    if (result.status === "level_won") add(T.debrief.next, true, function () { E.nextLevel(); showIntro(); });
     add(T.debrief.retry, lost, function () { E.retryLevel(); beginLevel(); });
-    add(T.debrief.again, result.status === "game_won", function () { E.startGame(); beginLevel(); });
+    add(T.debrief.again, result.status === "game_won", function () { E.startGame(); showIntro(); });
 
     // the real flares of this level: only the turns that were played
     var cards = $("debrief-storms");
@@ -470,7 +525,66 @@
     if (!d.storms.length) cards.appendChild(el("p", { text: T.debrief.noStormsPlayed }));
     d.storms.forEach(function (card) { cards.appendChild(stormCard(card)); });
 
+    batteryChart(d);
+    moonChart(d);
+    var recycler = $("debrief-recycler");
+    recycler.hidden = d.recyclerSaved === null;
+    if (d.recyclerSaved !== null) recycler.textContent = fmt(T.debrief.recyclerSaved, { n: d.recyclerSaved });
+
     showScreen("debrief", "debrief-headline");
+  }
+
+  /** One column of a bar chart. `height` is 0..100; a null value is a turn that was not played. */
+  function chartColumn(turn, opts) {
+    var cls = (turn > N.DAY_TURNS ? "night" : "day") + (opts.unplayed ? " unplayed" : "") + (opts.storm ? " storm" : "");
+    var bar = el("span");
+    if (!opts.unplayed) bar.style.height = Math.max(0, Math.min(100, opts.height)) + "%";
+    return el("li", { "class": cls, "aria-label": opts.label }, [
+      el("span", { "class": "num", "aria-hidden": "true", text: opts.unplayed ? "" : opts.text }),
+      el("span", { "class": "col", "aria-hidden": "true" }, [bar]),
+      el("span", { "class": "turn", "aria-hidden": "true", text: (turn > N.DAY_TURNS ? "🌙" : "☀️") + turn }),
+      opts.mark !== undefined ? el("span", { "class": "mark", "aria-hidden": "true", text: opts.mark }) : null
+    ]);
+  }
+
+  /** The battery at the end of every turn played. */
+  function batteryChart(d) {
+    var chart = $("debrief-battery");
+    chart.textContent = "";
+    for (var turn = 1; turn <= N.TURNS_PER_LEVEL; turn++) {
+      var h = d.history[turn - 1];
+      chart.appendChild(chartColumn(turn, h ? {
+        height: pct(h.battery, N.BATTERY_MAX), text: show(h.battery),
+        label: fmt(T.debrief.chartTurn, { turn: turn, value: show(h.battery) })
+      } : { unplayed: true, label: fmt(T.debrief.chartTurnHidden, { turn: turn }) }));
+    }
+  }
+
+  /** Radiation really measured at the Moon in this level's month, as "times a quiet day".
+   *  Shown after the level only; it never decides anything in the game. */
+  function moonChart(d) {
+    var quiet = LNS.STORMS && LNS.STORMS.moonQuiet;
+    var section = $("debrief-moon-section");
+    section.hidden = !(d.moonDose && quiet);
+    if (section.hidden) return;
+    var times = d.moonDose.map(function (v) { return v === null ? null : v / quiet; });
+    var top = Math.max.apply(null, times.map(function (v) { return v === null ? 1 : v; }));
+    var chart = $("debrief-moon");
+    chart.textContent = "";
+    times.forEach(function (v, i) {
+      var turn = i + 1;
+      var storm = d.stormTurns.indexOf(turn) !== -1;
+      if (v === null) {
+        chart.appendChild(chartColumn(turn, { unplayed: true, mark: "", label: fmt(T.debrief.chartTurnHidden, { turn: turn }) }));
+        return;
+      }
+      var text = fmt(T.debrief.moonTimes, { n: v >= 10 ? Math.round(v) : show(v) });
+      chart.appendChild(chartColumn(turn, {
+        height: (v / top) * 100, text: text, storm: storm, mark: storm ? T.debrief.moonStorm : "",
+        label: fmt(storm ? T.debrief.chartTurnStorm : T.debrief.chartTurn, { turn: turn, value: text })
+      }));
+    });
+    $("debrief-moon-note").textContent = fmt(T.debrief.moonChartNote, { date: fmtDate(LNS.STORMS.savedOn) });
   }
 
   function stormCard(card) {
@@ -513,12 +627,15 @@
     var picture = $("base-picture");
     picture.setAttribute("aria-label", T.meters.basePicture);
     if (LNS.Base) LNS.Base.mount(picture);
+    buildTitle();
+    buildScience();
     E.startGame();
-    beginLevel();
+    showTitle();
   }
 
   // For the dev pages and the browser console; the game itself does not use this.
-  LNS.UI = { fmt: fmt, fmtDate: fmtDate, fmtDateRange: fmtDateRange, beginLevel: beginLevel, showDebrief: showDebrief };
+  LNS.UI = { fmt: fmt, fmtDate: fmtDate, fmtDateRange: fmtDateRange, beginLevel: beginLevel, showIntro: showIntro,
+    showDebrief: showDebrief };
 
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", init);
   else init();
