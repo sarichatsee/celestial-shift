@@ -18,13 +18,16 @@ const BarChart = preload("res://bar_chart.gd")
 const DotRow = preload("res://dot_row.gd")
 const SoundFx = preload("res://sound_fx.gd")
 const LiveSun = preload("res://live_sun.gd")
+const MoonBaseView = preload("res://moon_base_view.gd")
 
 # Display-only settings (they never change a rule).
 const AIR_LOW_PCT := 30.0  # the Air meter warns under this
 const DOSE_HIGH := 60.0  # same line as the "radiation is high" tip
 const STEPPERS := ["life_support", "shield", "science", "charge"]
 
-@export var orbit_texture: Texture2D
+## Optional picture of the Moon base. Without one the base is drawn in code
+## (moon_base_view.gd) and shows the game state.
+@export var base_texture: Texture2D
 @export var greenhouse_plant0_texture: Texture2D
 @export var greenhouse_plant1_texture: Texture2D
 
@@ -65,7 +68,7 @@ var power_label: Label
 var power_note: Label
 var end_turn_button: Button
 var sound_button: Button
-var flare_glow: TextureRect
+var base_view: MoonBaseView
 var overlay: Control
 var overlay_card: PanelContainer
 var overlay_scroll: ScrollContainer
@@ -80,7 +83,7 @@ var _steppers := {}
 @onready var hud: Label = $TopBar/HUD
 @onready var dose_label: Label = $TopBar/DoseLabel
 @onready var dose_bar: ProgressBar = $TopBar/DoseBar
-@onready var orbit_button: Button = $TopBar/Orbit
+@onready var base_button: Button = $TopBar/Base
 @onready var greenhouse_button: Button = $TopBar/Greenhouse
 @onready var bottom_bar: ColorRect = $BottomBar
 @onready var room_status: Label = $BottomBar/RoomStatus
@@ -91,13 +94,13 @@ var _steppers := {}
 
 func _ready() -> void:
 	# Optional PNGs. Inspector assignments take priority over these paths.
-	orbit_texture = _find_art(orbit_texture, "res://assets/orbit.png")
+	base_texture = _find_art(base_texture, "res://assets/moon_base.png")
 	greenhouse_plant0_texture = _find_art(greenhouse_plant0_texture, "res://assets/greenhouse_plant0.png")
 	greenhouse_plant1_texture = _find_art(greenhouse_plant1_texture, "res://assets/greenhouse_plant1.png")
 
-	orbit_button.text = _t("rooms.orbit")
+	base_button.text = _t("rooms.base")
 	greenhouse_button.text = _t("rooms.greenhouse")
-	orbit_button.pressed.connect(_show_room.bind(false))
+	base_button.pressed.connect(_show_room.bind(false))
 	greenhouse_button.pressed.connect(_show_room.bind(true))
 	dose_bar.add_theme_stylebox_override("background", Kit.flat(Kit.C_WELL, 6, Kit.C_LINE, 1))
 	dose_bar.add_theme_stylebox_override("fill", Kit.flat(Kit.C_DANGER, 6))
@@ -105,7 +108,7 @@ func _ready() -> void:
 	sound = SoundFx.new()
 	add_child(sound)
 
-	_build_flare_glow()
+	_build_base_view()
 	_build_meters()
 	_build_alert()
 	_build_report()
@@ -213,31 +216,12 @@ func _place(node: Control, anchors: Rect2, left: float, top: float, right: float
 
 
 # ---------------------------------------------------------------- building the screen (once)
-## A soft glow over the Sun while a flare alert is up. It only says "there is an alert".
-func _build_flare_glow() -> void:
-	var gradient := Gradient.new()
-	gradient.set_color(0, Color(1.0, 0.85, 0.45, 0.85))
-	gradient.set_color(1, Color(1.0, 0.45, 0.1, 0.0))
-	var texture := GradientTexture2D.new()
-	texture.gradient = gradient
-	texture.fill = GradientTexture2D.FILL_RADIAL
-	texture.fill_from = Vector2(0.5, 0.5)
-	texture.fill_to = Vector2(1.0, 0.5)
-	texture.width = 256
-	texture.height = 256
-	flare_glow = TextureRect.new()
-	flare_glow.texture = texture
-	flare_glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	flare_glow.stretch_mode = TextureRect.STRETCH_SCALE
-	flare_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	flare_glow.position = Vector2(470, 120)
-	flare_glow.size = Vector2(480, 480)
-	flare_glow.visible = false
-	add_child(flare_glow)
-	move_child(flare_glow, artwork.get_index() + 1)
-	var pulse := create_tween().set_loops()
-	pulse.tween_property(flare_glow, "modulate:a", 0.4, 0.9)
-	pulse.tween_property(flare_glow, "modulate:a", 1.0, 0.9)
+## The drawn view of the Moon base, just above the artwork layer.
+func _build_base_view() -> void:
+	base_view = MoonBaseView.new()
+	add_child(base_view)
+	move_child(base_view, artwork.get_index() + 1)
+	base_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 func _build_meters() -> void:
@@ -721,7 +705,7 @@ func _refresh() -> void:
 	dose_label.text = _t("hud.radiation", {"dose": _num(game.dose), "limit": _n("DOSE_LIMIT")})
 	dose_bar.max_value = float(_n("DOSE_LIMIT"))
 	dose_bar.value = game.dose
-	orbit_button.set_pressed_no_signal(not in_greenhouse)
+	base_button.set_pressed_no_signal(not in_greenhouse)
 	greenhouse_button.set_pressed_no_signal(in_greenhouse)
 	greenhouse_button.disabled = not with_food
 	greenhouse_button.text = _t("rooms.greenhouse") + ("  " + _t("meters.new") if is_new else "")
@@ -781,7 +765,7 @@ func _refresh() -> void:
 		notice.text = _control_hint(last_control)
 		notice.add_theme_color_override("font_color", Kit.C_TEXT)
 	end_turn_button.disabled = problem != "" or need_choice
-	room_status.text = _greenhouse_status(recycler_on) if in_greenhouse else _orbit_status(alert)
+	room_status.text = _greenhouse_status(recycler_on) if in_greenhouse else _base_status(alert)
 
 	# what the saved record said about the last turn
 	report_panel.visible = not report.is_empty()
@@ -810,27 +794,59 @@ func _refresh() -> void:
 	_refresh_art()
 
 
-## The artwork behind everything: the room, the night, and a glow on the Sun during an alert.
+## The picture behind everything: the Moon base or the greenhouse.
 func _refresh_art() -> void:
 	var playing := screen == "game"
 	var growing := playing and bool(plan["greenhouse"])
+	base_view.visible = not in_greenhouse and base_texture == null
 	if in_greenhouse:
 		artwork.texture = greenhouse_plant1_texture if growing else greenhouse_plant0_texture
 		placeholder.text = _t("rooms.greenhouse_placeholder", {"state": int(growing)})
 	else:
-		artwork.texture = orbit_texture
-		placeholder.text = _t("rooms.orbit_placeholder")
-	placeholder.visible = artwork.texture == null
-	night_shade.color.a = 0.5 if (playing and not game.is_day()) else 0.0
-	flare_glow.visible = playing and not in_greenhouse and not game.alert_for_turn().is_empty()
+		artwork.texture = base_texture
+		placeholder.text = _t("rooms.base_placeholder")
+	if base_view.visible:
+		base_view.set_view(_base_view_state())
+	placeholder.visible = artwork.texture == null and not base_view.visible
+	# the drawn base has its own night; a picture file gets a dark wash instead
+	night_shade.color.a = 0.5 if (playing and not game.is_day() and not base_view.visible) else 0.0
 
 
-func _orbit_status(alert: Dictionary) -> String:
+## What the Moon base picture shows: the meters and the unsent plan, nothing
+## more. The alert is the player's view of it (class only), never the outcome.
+func _base_view_state() -> Dictionary:
+	var playing := screen == "game"
+	var with_food := game.has_food()
+	var alert := game.alert_for_turn() if playing else {}
+	var greenhouse := ""
+	if with_food:
+		greenhouse = "on" if (playing and bool(plan["greenhouse"])) else "off"
+	var life_support_ok: bool = not playing or int(plan["life_support"]) >= _n("LS_NEEDED")
+	return {
+		"is_day": game.is_day() if screen in ["game", "intro", "debrief"] else true,
+		"battery": game.battery / float(_n("BATTERY_MAX")),
+		"air": float(game.air) / float(_n("AIR_MAX")),
+		"life_support_ok": life_support_ok,
+		"science": playing and int(plan["science"]) > 0,
+		"shield": game.shield,
+		"shield_max": _n("MAX_SHIELD"),
+		"shield_part": float(game.shield_progress) / float(_n("SHIELD_COST")),
+		"sheltering": playing and bool(plan["shelter"]),
+		"greenhouse": greenhouse,
+		"food": float(game.food) / float(_n("FOOD_EATEN") * _n("TURNS_PER_LEVEL")) if with_food else 0.0,
+		"water": float(game.water) / float(_n("WATER_START")) if with_food else -1.0,
+		"recycler_on": life_support_ok,
+		"alert": str(alert.get("cls", "")),
+		"labels": T["rooms"]["labels"],
+	}
+
+
+func _base_status(alert: Dictionary) -> String:
 	var parts := PackedStringArray()
 	if alert.is_empty():
-		parts.append(_t("rooms.orbit_quiet"))
+		parts.append(_t("rooms.base_quiet"))
 	else:
-		parts.append(_t("rooms.orbit_alert", {"full_class": alert["full_class"]}))
+		parts.append(_t("rooms.base_alert", {"full_class": alert["full_class"]}))
 	var shield_words := _t("rooms.shield_status", {"shield": game.shield, "max": _n("MAX_SHIELD")})
 	if game.shield >= _n("MAX_SHIELD"):
 		shield_words += " (" + _t("rooms.shield_full") + ")"

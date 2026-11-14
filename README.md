@@ -9,8 +9,8 @@ science? The real record decides what happened, and the debrief shows the
 real dates.
 
 It grew out of the **Orbit 27 controls prototype** and keeps its look: the
-full-screen artwork, the two rooms (**Orbit** and **Greenhouse**, keys **1**
-and **2**), the top bar and the bottom bar. The rules, levels, storm data,
+full-screen artwork, two rooms on keys **1** and **2** (**Base**, a view of
+the Moon base, and **Greenhouse**), the top bar and the bottom bar. The rules, levels, storm data,
 debrief and Science page come from the browser build on the
 `lunar-night-shift` branch.
 
@@ -45,11 +45,14 @@ exactly the stars, radiation and shield that `tools/balance_sim.py` prints
 
 ## Add your artwork
 
-The project runs with labeled placeholders. Copy your PNGs into `assets/`:
+The Moon base is drawn in code (`moon_base_view.gd`), so it can show the game
+state: the battery filling, shield layers on the roof, the crew moving to the
+shelter, a flare on the Sun during an alert. The greenhouse uses PNGs. Copy
+yours into `assets/`:
 
 | File | When shown |
 | --- | --- |
-| `orbit.png` | Orbit room, and behind the title, intro and debrief |
+| `moon_base.png` | Optional. Replaces the drawn Moon base with a still picture (which no longer shows the game state) |
 | `greenhouse_plant0.png` | Greenhouse room, greenhouse switched off |
 | `greenhouse_plant1.png` | Greenhouse room, greenhouse switched on |
 
@@ -67,6 +70,7 @@ fill the 1280 × 720 canvas.
 | `game_state.gd` | The rules. No nodes, no randomness. The only reader of whether a storm followed. |
 | `main.gd`, `main.tscn` | The screen: draws the state, reads clicks, calls the rules. |
 | `ui_kit.gd` | Colours and small builders, so the look lives in one place. |
+| `moon_base_view.gd` | The picture of the Moon base, drawn from the meters and the plan. |
 | `bar_chart.gd`, `dot_row.gd` | The debrief charts and the dots (storm chance, shield layers). |
 | `live_sun.gd` | "The Sun right now" on the title screen: live DONKI fetch with a saved fallback. |
 | `sound_fx.gd` | Beeps made in code (no sound files), with a mute button. |
