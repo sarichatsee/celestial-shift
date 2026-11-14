@@ -74,16 +74,16 @@ toggle_mode = true
 text = "2  Greenhouse"
 
 [node name="DoseLabel" type="Label" parent="TopBar"]
-offset_left = 350.0
+offset_left = 372.0
 offset_top = 14.0
-offset_right = 545.0
+offset_right = 567.0
 offset_bottom = 36.0
 theme_override_font_sizes/font_size = 16
 
 [node name="DoseBar" type="ProgressBar" parent="TopBar"]
-offset_left = 350.0
+offset_left = 372.0
 offset_top = 43.0
-offset_right = 520.0
+offset_right = 542.0
 offset_bottom = 56.0
 show_percentage = false
 

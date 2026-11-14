@@ -185,7 +185,31 @@ func _find_art(assigned: Texture2D, path: String) -> Texture2D:
 
 
 func _focus(node: Control) -> void:
-	node.grab_focus.call_deferred()
+	(func() -> void:
+		if not is_instance_valid(node) or not node.is_inside_tree():
+			return
+		node.grab_focus()
+		if overlay.visible:
+			# the card scrolls to the focused button before its text has been
+			# laid out; a fresh screen should start at the top
+			await get_tree().process_frame
+			await get_tree().process_frame
+			overlay_scroll.scroll_vertical = 0
+	).call_deferred()
+
+
+## Anchor a control and set its edges. `anchors` holds left, top, right, bottom
+## (as position and size). Right and bottom go first: a left or top anchor may
+## never pass the opposite one, so the other order silently clamps it.
+func _place(node: Control, anchors: Rect2, left: float, top: float, right: float, bottom: float) -> void:
+	node.anchor_right = anchors.size.x
+	node.anchor_bottom = anchors.size.y
+	node.anchor_left = anchors.position.x
+	node.anchor_top = anchors.position.y
+	node.offset_left = left
+	node.offset_top = top
+	node.offset_right = right
+	node.offset_bottom = bottom
 
 
 # ---------------------------------------------------------------- building the screen (once)
@@ -260,8 +284,8 @@ func _build_meters() -> void:
 func _build_alert() -> void:
 	alert_panel = PanelContainer.new()
 	alert_panel.add_theme_stylebox_override("panel", Kit.flat(Color(0.16, 0.1, 0.04, 0.95), 8, Kit.C_SUN, 2, 12))
-	alert_panel.position = Vector2(356, 88)
-	alert_panel.custom_minimum_size = Vector2(900, 0)
+	alert_panel.position = Vector2(390, 88)  # clear of the meters panel
+	alert_panel.custom_minimum_size = Vector2(866, 0)
 	alert_panel.visible = false
 	add_child(alert_panel)
 	var box := Kit.vbox(6)
@@ -296,10 +320,7 @@ func _build_report() -> void:
 	report_panel = PanelContainer.new()
 	report_panel.visible = false
 	add_child(report_panel)
-	report_panel.set_anchor_and_offset(SIDE_LEFT, 0.0, 24.0)
-	report_panel.set_anchor_and_offset(SIDE_RIGHT, 1.0, -24.0)
-	report_panel.set_anchor_and_offset(SIDE_TOP, 1.0, -262.0)
-	report_panel.set_anchor_and_offset(SIDE_BOTTOM, 1.0, -218.0)
+	_place(report_panel, Rect2(0.0, 1.0, 1.0, 1.0), 24.0, -262.0, -24.0, -218.0)
 	report_label = Kit.label("", 18)
 	report_label.clip_text = true
 	report_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -390,10 +411,7 @@ func _build_overlay() -> void:
 	var footer := Kit.label(_t("title.disclaimer"), 14, Kit.C_HUD)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay.add_child(footer)
-	footer.set_anchor_and_offset(SIDE_LEFT, 0.0, 0.0)
-	footer.set_anchor_and_offset(SIDE_RIGHT, 1.0, 0.0)
-	footer.set_anchor_and_offset(SIDE_TOP, 1.0, -34.0)
-	footer.set_anchor_and_offset(SIDE_BOTTOM, 1.0, -10.0)
+	_place(footer, Rect2(0.0, 1.0, 1.0, 1.0), 0.0, -34.0, 0.0, -10.0)
 
 
 ## Show the shared card, `height` canvas pixels tall, with nothing in it yet.
@@ -401,10 +419,7 @@ func _open_overlay(height: float) -> void:
 	for child in overlay_content.get_children():
 		overlay_content.remove_child(child)
 		child.queue_free()
-	overlay_card.set_anchor_and_offset(SIDE_LEFT, 0.5, -460.0)
-	overlay_card.set_anchor_and_offset(SIDE_RIGHT, 0.5, 460.0)
-	overlay_card.set_anchor_and_offset(SIDE_TOP, 0.5, -height / 2.0 - 12.0)
-	overlay_card.set_anchor_and_offset(SIDE_BOTTOM, 0.5, height / 2.0 - 12.0)
+	_place(overlay_card, Rect2(0.5, 0.5, 0.5, 0.5), -460.0, -height / 2.0 - 12.0, 460.0, height / 2.0 - 12.0)
 	overlay_scroll.scroll_vertical = 0
 	overlay.visible = true
 	_set_game_visible(false)
