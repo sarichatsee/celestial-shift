@@ -626,9 +626,11 @@ team the same day.** The sentences used are quoted above each row in `game_text.
 - `flare_vs_storm`: a flare is light (about 8 minutes to Earth); a radiation storm is fast particles
   (about 30 minutes or less for the fastest) (same page).
 
-**Still to verify (your human checks these; mark them in `game_text.gd` with `TODO(verify)` and never mark one verified yourself):**
+**Written by the coding agent on 2026-11-15 and marked as checked by the team the same day:**
 - `storm_strength` (Science page only): "A bigger flare does not always mean a bigger radiation storm",
   with the M6.8 and X3.3 turns of the saved Moon measurements as the example (365.25 and 363.36).
+
+**Still to verify (your human checks these; mark them in `game_text.gd` with `TODO(verify)` and never mark one verified yourself):**
 - The August 1972 storm between Apollo 16 and 17 (not used in the game).
 - NASA Veggie and CSA food-production facts beyond "real crops take weeks to grow" (not used in the game).
 - Any other science sentence you write.

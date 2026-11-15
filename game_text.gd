@@ -412,7 +412,7 @@ const TEXT := {
 				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
 			},
 			{
-				# TODO(verify): written by the coding agent on 2026-11-15, not yet checked by a human.
+				# Written by the coding agent on 2026-11-15; marked as checked by the team the same day.
 				# The second sentence is from this game's saved data (storms_data.gd, the
 				# Space Weather window): the per-turn means of CRaTER's dose rate are 365.25
 				# for turn 9 (M6.8, a storm followed) and 363.36 for turn 14 (X3.3, a storm
@@ -420,7 +420,7 @@ const TEXT := {
 				"id": "storm_strength",
 				"game": "An X-class storm adds more Radiation than an M-class storm: 25 against 10 with no shield.",
 				"real": "A bigger flare does not always mean a bigger radiation storm. In this game's saved Moon measurements, the two days with the M6.8 storm were as strong as the two days with the X3.3 storm.",
-				"verified": false,
+				"verified": true,
 			},
 			{
 				# checked by the team, 2026-11-15
