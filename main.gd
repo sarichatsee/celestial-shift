@@ -1488,9 +1488,10 @@ func _end_turn() -> void:
 	# One real-life fact about what just happened, the most important first.
 	var events: Array = []
 	if not report.is_empty() and bool(report["hit"]):
+		events.append("storm")
 		if played_turn > _n("DAY_TURNS"):
 			events.append("storm_night")
-		events.append("storm")
+		events.append("storm_more")
 	elif not report.is_empty() and bool(report["alert"]):
 		events.append("false_alarm")
 	if alert_now:

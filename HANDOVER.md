@@ -611,15 +611,16 @@ If time runs short, cut from the bottom. **Never cut the real storms or the debr
   crop growth, ISS water recovery.
 - How the May 2024 storm is described in the Level 4 intro.
 
+**Researched by the coding agent on 2026-11-15 from NASA Science pages, and marked as checked by the
+team the same day.** The sentences used are quoted above each row in `game_text.gd`.
+- `why_moon`: Earth has an atmosphere and a global magnetic field; the Moon has neither
+  (https://science.nasa.gov/moon/solar-wind/).
+- `flare_classes`: classes A, B, C, M, X, each 10 times stronger than the one before
+  (https://science.nasa.gov/sun/solar-storms-and-flares/).
+- `flare_vs_storm`: a flare is light (about 8 minutes to Earth); a radiation storm is fast particles
+  (about 30 minutes or less for the fastest) (same page).
+
 **Still to verify (your human checks these; mark them in `game_text.gd` with `TODO(verify)` and never mark one verified yourself):**
-- Three facts the coding agent researched on 2026-11-15 from NASA Science pages. The sentences it used
-  are quoted above each row in `game_text.gd`. They are hidden in play until marked as checked.
-  - `why_moon`: Earth has an atmosphere and a global magnetic field; the Moon has neither
-    (https://science.nasa.gov/moon/solar-wind/).
-  - `flare_classes`: classes A, B, C, M, X, each 10 times stronger than the one before
-    (https://science.nasa.gov/sun/solar-storms-and-flares/).
-  - `flare_vs_storm`: a flare is light (about 8 minutes to Earth); a radiation storm is fast particles
-    (about 30 minutes or less for the fastest) (same page).
 - The August 1972 storm between Apollo 16 and 17 (not used in the game).
 - NASA Veggie and CSA food-production facts beyond "real crops take weeks to grow" (not used in the game).
 - Any other science sentence you write.

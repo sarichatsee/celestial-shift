@@ -371,7 +371,7 @@ const TEXT := {
 				"verified": true,
 			},
 			{
-				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Researched by the coding agent on 2026-11-15; marked as checked by the team the same day.
 				# Source says: "Our planet has two layers of protection that the Moon lacks - an
 				# atmosphere and a global magnetic field" and "With no magnetosphere, and almost no
 				# atmosphere, most of the lunar surface is directly exposed to solar wind and other
@@ -380,12 +380,12 @@ const TEXT := {
 				"game": "A radiation storm is a danger at the Moon base.",
 				"real": "Earth has two shields that the Moon lacks: its air and a magnetic field all around the planet. On the Moon, most of the ground is open to radiation from space.",
 				"note": "Earth has two shields that the Moon lacks: its air and its magnetic field.",
-				"verified": false,
+				"verified": true,
 				"source_name": "NASA Science: Solar Wind on the Moon",
 				"source": "https://science.nasa.gov/moon/solar-wind/",
 			},
 			{
-				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Researched by the coding agent on 2026-11-15; marked as checked by the team the same day.
 				# Source says: "each higher class is a 10-fold increase in energy. So an X flare is
 				# 10 times stronger than an M flare" and classes A to M "are divided further using
 				# numbers 1 through 9".
@@ -393,12 +393,12 @@ const TEXT := {
 				"game": "An alert shows the flare's class, such as M5.1 or X3.9.",
 				"real": "Flares are sorted into classes A, B, C, M and X, from weakest to strongest. Each class is 10 times stronger than the one before, so an X flare is 10 times stronger than an M flare. The number after the letter sorts flares inside a class.",
 				"note": "Flares go A, B, C, M, X. Each letter is 10 times stronger than the one before.",
-				"verified": false,
+				"verified": true,
 				"source_name": "NASA Science: Solar Storms and Flares",
 				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
 			},
 			{
-				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Researched by the coding agent on 2026-11-15; marked as checked by the team the same day.
 				# Source says: a solar flare is "an intense burst of radiation, or light", its
 				# energy "reaches Earth about 8 minutes after a flare happens", and in a radiation
 				# storm "the fastest particles ... zip across roughly 93 million miles from the Sun
@@ -407,7 +407,7 @@ const TEXT := {
 				"game": "The alert comes first. A radiation storm may follow, or not.",
 				"real": "A flare is a burst of light. Its light reaches Earth about 8 minutes after the flare happens. A radiation storm is made of fast particles, and the fastest can cross from the Sun to Earth in about 30 minutes or less.",
 				"note": "A flare is a burst of light. A radiation storm is fast particles, which come later.",
-				"verified": false,
+				"verified": true,
 				"source_name": "NASA Science: Solar Storms and Flares",
 				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
 			},
@@ -489,8 +489,9 @@ const TEXT := {
 		"in_play": {
 			# What just happened -> the facts to tell, one each time it happens, in this order.
 			"events": {
+				"storm": ["why_moon"],  # the first storm that hits: why it matters on the Moon
 				"storm_night": ["night_storms"],
-				"storm": ["why_moon", "shelter", "dose_bar"],
+				"storm_more": ["shelter", "dose_bar"],
 				"false_alarm": ["odds", "cosmic_rays"],
 				"alert": ["flare_classes", "flare_vs_storm", "real_flares"],
 				"night": ["lunar_night"],
