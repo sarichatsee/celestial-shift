@@ -1,0 +1,58 @@
+# Publishes the web build (the web-export/ folder) to GitHub Pages.
+#
+# THIS COPY DOES NOTHING HERE. GitHub only runs workflows from
+# .github/workflows/. To use it, add it to the repository on github.com as
+# .github/workflows/pages.yml (Add file -> Create new file, paste this text).
+# It is kept here because the login used to push this branch may not change
+# workflow files.
+#
+# It only copies files: it does not run Godot. Export the game first
+# (see "Web build" in README.md) and commit web-export/.
+#
+# Before the first run, in the repository's settings on github.com:
+#   1. Settings -> Pages -> Source: "GitHub Actions".
+#   2. Settings -> Environments -> github-pages -> Deployment branches:
+#      allow the branch you push to (only the default branch is allowed
+#      at first).
+#   3. In a fork, open the Actions tab once and enable workflows.
+#
+# The job runs by itself in a fork. In the team's own repository it stays
+# off, so it cannot fail there, until someone turns Pages on and adds the
+# repository variable DEPLOY_PAGES = true (Settings -> Secrets and
+# variables -> Actions -> Variables).
+
+name: Publish the web build
+
+on:
+  push:
+    branches: [godot-lunar-night-shift, main]
+    paths:
+      - "web-export/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push waits for the one in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.repository.fork || vars.DEPLOY_PAGES == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web-export
+      - id: deployment
+        uses: actions/deploy-pages@v5
