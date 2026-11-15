@@ -5,7 +5,9 @@ extends Node
 ## presses a button.
 ##
 ##   play("click" | "invalid" | "alert" | "storm_hit" | "shelter" | "shield"
-##        | "false_alarm" | "low" | "level_won" | "lost")
+##        | "false_alarm" | "low" | "mission" | "level_won" | "lost")
+##
+## "mission" (a mission was finished) has no file yet: it plays its beep.
 ##
 ## Clicks have their own player, so a click never cuts off a storm sound.
 
@@ -41,6 +43,7 @@ const BEEPS := {
 	"shield": [[392.0, 0.08], [523.25, 0.14]],
 	"false_alarm": [[523.25, 0.1], [659.25, 0.14]],
 	"low": [[330.0, 0.14], [330.0, 0.14]],
+	"mission": [[587.33, 0.09], [783.99, 0.09], [1046.5, 0.16]],
 	"level_won": [[523.25, 0.12], [659.25, 0.12], [783.99, 0.22]],
 	"lost": [[392.0, 0.18], [329.63, 0.18], [261.63, 0.3]],
 }

@@ -1,7 +1,7 @@
 extends Control
 ## The screen of Lunar Night Shift, in the style of the Orbit 27 controls
-## prototype: full-screen artwork, a top bar with the two rooms and the HUD, and a
-## bottom bar with the status lines and the controls.
+## prototype: full-screen artwork, a top bar with the HUD, and a bottom bar with
+## the mission line and the controls, grouped by what they are for.
 ##
 ## It draws the state, reads clicks and calls the rules (game_state.gd). It never
 ## changes a game number itself, and every word comes from game_text.gd.
@@ -11,6 +11,7 @@ extends Control
 ## followed is read from game.get_debrief(), which holds played turns only.
 
 const GameState = preload("res://game_state.gd")
+const Numbers = preload("res://game_numbers.gd")
 const GameText = preload("res://game_text.gd")
 const StormsData = preload("res://storms_data.gd")
 const Kit = preload("res://ui_kit.gd")
@@ -19,11 +20,19 @@ const DotRow = preload("res://dot_row.gd")
 const SoundFx = preload("res://sound_fx.gd")
 const LiveSun = preload("res://live_sun.gd")
 const MoonBaseView = preload("res://moon_base_view.gd")
+const StarRow = preload("res://star_row.gd")
 
 # Display-only settings (they never change a rule).
 const AIR_LOW_PCT := 30.0  # the Air meter warns under this
 const DOSE_HIGH := 60.0  # same line as the "radiation is high" tip
 const STEPPERS := ["life_support", "shield", "science", "charge"]
+## The controls in the bottom bar, grouped by purpose: [words key, steppers, colour].
+## The greenhouse switch joins the first group on levels that have one.
+const GROUPS := [
+	["running", ["life_support", "charge"], Kit.C_GOOD],
+	["protection", ["shield"], Kit.C_WATER],
+	["science", ["science"], Kit.C_SUN],
+]
 ## The buildings of the Moon base that open a card when clicked, and where each
 ## one is on the 1280 x 720 canvas (moon_base_view.gd draws them there). The
 ## areas are bigger than the drawings so they are easy to hit.
@@ -74,6 +83,8 @@ var alert_chance: Label
 var alert_when: Label
 var alert_stakes: Label
 var alert_cost: Label
+var goals_panel: PanelContainer
+var _goal_rows := {}  # "safe" / "science" / "missions" -> {star, words}
 var shelter_button: Button
 var stay_button: Button
 var report_panel: PanelContainer
@@ -136,6 +147,7 @@ func _ready() -> void:
 	_build_hotspots()
 	_build_meters()
 	_build_alert()
+	_build_goals()
 	_build_report()
 	_build_part_card()
 	_build_actions()
@@ -301,8 +313,8 @@ func _build_meters() -> void:
 func _build_alert() -> void:
 	alert_panel = PanelContainer.new()
 	alert_panel.add_theme_stylebox_override("panel", Kit.flat(Color(0.16, 0.1, 0.04, 0.95), 8, Kit.C_SUN, 2, 12))
-	alert_panel.position = Vector2(390, 88)  # clear of the meters panel
-	alert_panel.custom_minimum_size = Vector2(866, 0)
+	alert_panel.position = Vector2(390, 88)  # between the meters panel and the goals panel
+	alert_panel.custom_minimum_size = Vector2(556, 0)
 	alert_panel.visible = false
 	add_child(alert_panel)
 	var box := Kit.vbox(6)
@@ -311,7 +323,7 @@ func _build_alert() -> void:
 	head.add_child(Kit.label(_t("alert.heading"), 16, Kit.C_SUN))
 	alert_title = Kit.label("", 22)
 	head.add_child(alert_title)
-	alert_when = Kit.label("", 15, Kit.C_MUTED)
+	alert_when = Kit.label("", 14, Kit.C_MUTED)
 	alert_when.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	alert_when.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	head.add_child(alert_when)
@@ -322,21 +334,44 @@ func _build_alert() -> void:
 	alert_chance = Kit.label("", 18)
 	odds.add_child(alert_chance)
 	box.add_child(odds)
-	# what is at stake if a storm comes, and what sheltering gives up
-	alert_stakes = Kit.label("", 18)
+	# what is at stake if a storm comes: each answer says what it would add
+	alert_stakes = Kit.label("", 17, Kit.C_SUN)
 	box.add_child(alert_stakes)
+	var choices := Kit.hbox(12)
+	shelter_button = Kit.button("", 0)
+	stay_button = Kit.button("", 0)
+	for choice_button in [shelter_button, stay_button]:
+		choice_button.toggle_mode = true
+		choice_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		choice_button.add_theme_font_size_override("font_size", 18)
+		choices.add_child(choice_button)
+	shelter_button.pressed.connect(_choose.bind("shelter"))
+	stay_button.pressed.connect(_choose.bind("stay"))
+	box.add_child(choices)
 	alert_cost = Kit.label("", 15, Kit.C_MUTED)
 	box.add_child(alert_cost)
-	var choices := Kit.hbox(12)
-	shelter_button = Kit.button("", 360)
-	shelter_button.toggle_mode = true
-	shelter_button.pressed.connect(_choose.bind("shelter"))
-	stay_button = Kit.button("", 300)
-	stay_button.toggle_mode = true
-	stay_button.pressed.connect(_choose.bind("stay"))
-	choices.add_child(shelter_button)
-	choices.add_child(stay_button)
-	box.add_child(choices)
+
+
+## The three stars of this level, top right: what each one asks, and how far along it is.
+func _build_goals() -> void:
+	goals_panel = Kit.panel()
+	goals_panel.position = Vector2(962, 88)
+	goals_panel.custom_minimum_size = Vector2(294, 0)
+	goals_panel.visible = false
+	add_child(goals_panel)
+	var box := Kit.vbox(4)
+	goals_panel.add_child(box)
+	box.add_child(Kit.label(_t("stars.heading"), 14, Kit.C_SUN))
+	for key in ["safe", "science", "missions"]:
+		var row := Kit.hbox(6)
+		var star := StarRow.new()
+		star.star_size = 18.0
+		star.set_stars([false])
+		row.add_child(star)
+		var words := Kit.label("", 16)
+		row.add_child(words)
+		box.add_child(row)
+		_goal_rows[key] = {"star": star, "words": words}
 
 
 ## One line just above the bottom bar: what the saved record says about the last turn.
@@ -352,37 +387,48 @@ func _build_report() -> void:
 
 
 func _build_actions() -> void:
-	for key in STEPPERS:
-		var cell := Kit.vbox(2)
-		var name_label := Kit.label(_t("controls." + key), 16, Kit.C_STATUS)
-		cell.add_child(name_label)
-		var row := Kit.hbox(4)
-		var minus := Kit.button("-", Kit.TAP)
-		var plus := Kit.button("+", Kit.TAP)
-		for step_button in [minus, plus]:
-			step_button.add_theme_font_size_override("font_size", 26)
-			step_button.tooltip_text = _t("controls.hints." + key)
-		var value := Kit.label("0", 26)
-		value.custom_minimum_size = Vector2(40, Kit.TAP)
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		minus.pressed.connect(_step.bind(key, -1))
-		plus.pressed.connect(_step.bind(key, 1))
-		row.add_child(minus)
-		row.add_child(value)
-		row.add_child(plus)
-		cell.add_child(row)
-		actions.add_child(cell)
-		_steppers[key] = {"cell": cell, "minus": minus, "plus": plus, "value": value}
-
-	greenhouse_cell = Kit.vbox(2)
-	greenhouse_cell.add_child(Kit.label(_t("controls.greenhouse"), 16, Kit.C_STATUS))
-	greenhouse_toggle = Kit.button(_t("controls.off"), 120)
-	greenhouse_toggle.toggle_mode = true
-	greenhouse_toggle.tooltip_text = _t("controls.hints.greenhouse") + " " + _t("controls.greenhouse_cost") + "."
-	greenhouse_toggle.pressed.connect(_toggle_greenhouse)
-	greenhouse_cell.add_child(greenhouse_toggle)
-	actions.add_child(greenhouse_cell)
+	# one box for each purpose, so the controls read as three jobs, not five dials
+	for group in GROUPS:
+		var color: Color = group[2]
+		var group_panel := PanelContainer.new()
+		group_panel.add_theme_stylebox_override("panel", Kit.flat(Kit.C_CARD, 8, Color(color, 0.55), 1, 8))
+		actions.add_child(group_panel)
+		var group_box := Kit.vbox(2)
+		group_panel.add_child(group_box)
+		group_box.add_child(Kit.label(_t("controls.groups." + str(group[0])), 13, color))
+		var cells := Kit.hbox(12)
+		group_box.add_child(cells)
+		for key in group[1]:
+			var cell := Kit.vbox(2)
+			var name_label := Kit.label(_t("controls." + key), 16, Kit.C_TEXT)
+			cell.add_child(name_label)
+			var row := Kit.hbox(4)
+			var minus := Kit.button("-", Kit.TAP)
+			var plus := Kit.button("+", Kit.TAP)
+			for step_button in [minus, plus]:
+				step_button.add_theme_font_size_override("font_size", 26)
+				step_button.tooltip_text = _t("controls.hints." + key)
+			var value := Kit.label("0", 26)
+			value.custom_minimum_size = Vector2(40, Kit.TAP)
+			value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			minus.pressed.connect(_step.bind(key, -1))
+			plus.pressed.connect(_step.bind(key, 1))
+			row.add_child(minus)
+			row.add_child(value)
+			row.add_child(plus)
+			cell.add_child(row)
+			cells.add_child(cell)
+			_steppers[key] = {"cell": cell, "minus": minus, "plus": plus, "value": value}
+		if str(group[0]) == "running":
+			greenhouse_cell = Kit.vbox(2)
+			greenhouse_cell.add_child(Kit.label(_t("controls.greenhouse"), 16, Kit.C_TEXT))
+			greenhouse_toggle = Kit.button(_t("controls.off"), 120)
+			greenhouse_toggle.toggle_mode = true
+			greenhouse_toggle.tooltip_text = _t("controls.hints.greenhouse") + " " + _t("controls.greenhouse_cost") + "."
+			greenhouse_toggle.pressed.connect(_toggle_greenhouse)
+			greenhouse_cell.add_child(greenhouse_toggle)
+			cells.add_child(greenhouse_cell)
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -454,6 +500,7 @@ func _set_game_visible(showing: bool) -> void:
 	top_bar.visible = showing
 	bottom_bar.visible = showing
 	meters_panel.visible = showing
+	goals_panel.visible = showing
 	if not showing:
 		_close_part()
 		for key in _hotspots:
@@ -466,7 +513,7 @@ func _set_game_visible(showing: bool) -> void:
 func _show_title() -> void:
 	screen = "title"
 	in_greenhouse = false
-	_open_overlay(620.0)
+	_open_overlay(650.0)
 	overlay_content.add_child(Kit.label(_t("title.name"), 54, Kit.C_SUN))
 	overlay_content.add_child(Kit.label(_t("title.tagline"), 22, Kit.C_TEXT, true))
 	var number := 1
@@ -475,21 +522,35 @@ func _show_title() -> void:
 		step_card.add_child(Kit.label("%d.  %s" % [number, str(line)], 19, Kit.C_TEXT, true))
 		overlay_content.add_child(step_card)
 		number += 1
+	# two games: a short one to start with, and the full one
 	var buttons := Kit.hbox(12)
-	var start_button := Kit.button(_t("title.start"), 250, true)
-	start_button.pressed.connect(_start_mission)
+	var short_button := Kit.button(_t("title.start_short"), 210, true)
+	short_button.pressed.connect(_start_mission.bind("short"))
+	var full_button := Kit.button(_t("title.start_full"), 210)
+	full_button.pressed.connect(_start_mission.bind("full"))
 	var science_button := Kit.button(_t("title.science"), 230)
 	science_button.pressed.connect(_show_science)
-	buttons.add_child(start_button)
+	buttons.add_child(short_button)
+	buttons.add_child(full_button)
 	buttons.add_child(science_button)
 	overlay_content.add_child(buttons)
+	var short_numbers: Dictionary = Numbers.SHORT
+	var full_numbers: Dictionary = Numbers.DEFAULTS
+	overlay_content.add_child(Kit.label(
+		_t("title.start_short") + ": " + _t("title.short_note", {
+			"levels": Numbers.LEVELS_SHORT.size(), "turns": short_numbers["TURNS_PER_LEVEL"],
+		}) + "\n" + _t("title.start_full") + ": " + _t("title.full_note", {
+			"levels": Numbers.LEVELS.size(), "turns": full_numbers["TURNS_PER_LEVEL"],
+		}), 16, Kit.C_MUTED, true))
 	overlay_content.add_child(_live_card())
-	_focus(start_button)
+	_focus(short_button)
 
 
-func _start_mission() -> void:
+## Start a new game: "short" or "full". Each new game gets its own missions.
+func _start_mission(mode: String) -> void:
 	sound.play("click")
-	game.start_game()
+	game.mission_seed = randi()
+	game.set_mode(mode)
 	new_meters_seen = false
 	_show_intro()
 
@@ -537,18 +598,30 @@ func _on_live_sun_loaded(info: Dictionary) -> void:
 func _show_intro() -> void:
 	screen = "intro"
 	in_greenhouse = false
-	_open_overlay(420.0)
+	_open_overlay(500.0)
 	var info := game.get_level_info()
 	var total := _n("TURNS_PER_LEVEL")
 	overlay_content.add_child(Kit.label(_t("intro.level", {"n": game.level, "total": game.levels.size()}), 16, Kit.C_STATUS))
 	overlay_content.add_child(Kit.label(str(info["name"]), 46, Kit.C_SUN))
-	overlay_content.add_child(Kit.label(str(T["levels"][int(info["index"])]["intro"]), 22, Kit.C_TEXT, true))
+	overlay_content.add_child(Kit.label(str(game.level_text()["intro"]), 22, Kit.C_TEXT, true))
 	if bool(info["has_storms"]):
 		var first := str(game.turn_dates(1)["from"])
 		var last := str(game.turn_dates(total)["to"])
 		overlay_content.add_child(Kit.label(_t("intro.real_dates", {
 			"from": _fmt_date(first, true, first.substr(0, 4) != last.substr(0, 4)), "to": _fmt_date(last, true),
 		}), 20, Kit.C_WATER, true))
+	# what the three stars of this level ask for
+	var progress := game.get_progress()
+	var goals := Kit.panel(Kit.C_CARD, 10, 6)
+	var goals_box := Kit.vbox(4)
+	goals.add_child(goals_box)
+	goals_box.add_child(Kit.label(_t("stars.heading"), 14, Kit.C_SUN))
+	for words in [
+		_t("stars.safe"), _t("stars.science", {"goal": progress["science_goal"]}),
+		_missions_goal_words(int(progress["missions_goal"])),
+	]:
+		goals_box.add_child(_star_line(false, str(words), 19))
+	overlay_content.add_child(goals)
 	var go_button := Kit.button(_t("intro.go"), 250, true)
 	go_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	go_button.pressed.connect(_begin_level)
@@ -578,6 +651,9 @@ func _show_science() -> void:
 		columns.add_child(game_side)
 		columns.add_child(real_side)
 		overlay_content.add_child(card)
+	overlay_content.add_child(Kit.label(_t("science.notes_heading"), 24, Kit.C_SUN))
+	for line in T["science"]["notes"]:
+		overlay_content.add_child(Kit.label(str(line), 17, Kit.C_TEXT, true))
 	overlay_content.add_child(Kit.label(_t("science.datasets_heading"), 24, Kit.C_SUN))
 	for dataset in T["science"]["datasets"]:
 		overlay_content.add_child(Kit.link(str(dataset["name"]), str(dataset["url"])))
@@ -687,9 +763,11 @@ func _open_part(key: String) -> void:
 			_card_stepper(part_card_box, "charge")
 		"science":
 			_card_words(_t("rooms.about.science"))
-			var stars := Kit.label("", 17)
-			part_card_box.add_child(stars)
-			_card_updates.append(func() -> void: stars.text = _t("rooms.stars_so_far", {"stars": game.stars}))
+			var so_far := Kit.label("", 17)
+			part_card_box.add_child(so_far)
+			_card_updates.append(func() -> void:
+				var now := game.get_progress()
+				so_far.text = _t("rooms.science_so_far", {"science": now["level_science"], "goal": now["science_goal"]}))
 			_card_stepper(part_card_box, "science")
 		"base":
 			wide = 640.0
@@ -747,12 +825,15 @@ func _open_part(key: String) -> void:
 			choices.add_child(shelter_copy)
 			choices.add_child(stay_copy)
 			part_card_box.add_child(choices)
+			var cost := Kit.label("", 15, Kit.C_MUTED)
+			part_card_box.add_child(cost)
 			_card_updates.append(func() -> void:
 				var alert_now := game.alert_for_turn()
 				var alert_up := not alert_now.is_empty()
 				quiet.visible = not alert_up
-				for part in [flare, odds, stakes, choices]:
+				for part in [flare, odds, stakes, choices, cost]:
 					(part as Control).visible = alert_up
+				cost.text = alert_cost.text
 				if alert_up:
 					flare.text = alert_title.text
 					odds_dots.set_dots(int(alert_now["dots"]), 10)
@@ -1036,11 +1117,13 @@ func _refresh() -> void:
 	var need_choice := not alert.is_empty() and choice == ""
 	var total_turns := _n("TURNS_PER_LEVEL")
 	var is_new := with_food and hint == _t("messages.new_meters")
+	var progress := game.get_progress()
 
 	# top bar
 	var hud_values := {
 		"level": game.level, "name": str(info["name"]).to_upper(), "turn": "%02d" % game.turn,
-		"total": total_turns, "phase": _t("meters.day") if day else _t("meters.night"), "stars": game.stars,
+		"total": total_turns, "phase": _t("meters.day") if day else _t("meters.night"),
+		"earned": progress["stars_earned"], "possible": progress["stars_possible"],
 	}
 	var dates := game.turn_dates(game.turn)
 	if dates.is_empty():
@@ -1108,15 +1191,49 @@ func _refresh() -> void:
 		notice.text = _control_hint(last_control)
 		notice.add_theme_color_override("font_color", Kit.C_TEXT)
 	end_turn_button.disabled = problem != "" or need_choice
-	room_status.text = _greenhouse_status(recycler_on) if in_greenhouse else _base_status(alert)
+
+	# the mission line (or, inside the greenhouse, what the greenhouse is doing)
+	var mission := game.mission_for_turn()
+	var status_color: Color = Kit.C_MUTED
+	if in_greenhouse:
+		room_status.text = _greenhouse_status(recycler_on)
+		status_color = Kit.C_STATUS
+	elif not mission.is_empty():
+		var mission_ready := game.mission_met(plan)
+		room_status.text = _t("missions.ready" if mission_ready else "missions.line", _mission_words(mission))
+		status_color = Kit.C_SUN if mission_ready else Kit.C_TEXT
+	else:
+		var coming := game.next_mission()
+		if coming.is_empty():
+			room_status.text = _t("missions.none_left")
+		else:
+			room_status.text = _t("missions.next", {
+				"name": _mission_words(coming["mission"])["name"], "turn": coming["turn"],
+			})
+	room_status.add_theme_color_override("font_color", status_color)
+
+	# the three stars of this level
+	var science_reached: bool = int(progress["level_science"]) >= int(progress["science_goal"])
+	var missions_reached: bool = int(progress["missions_done"]) >= int(progress["missions_goal"])
+	_set_goal("safe", false, _t("stars.safe"))  # only known at the end of the level
+	_set_goal("science", science_reached, _t("stars.science_now", {
+		"goal": progress["science_goal"], "now": progress["level_science"],
+	}))
+	_set_goal("missions", missions_reached, _t("stars.missions_now", {
+		"text": _missions_goal_words(int(progress["missions_goal"])), "now": progress["missions_done"],
+	}))
+	goals_panel.reset_size.call_deferred()
 
 	# what the saved record said about the last turn
 	report_panel.visible = not report.is_empty()
 	if not report.is_empty():
-		var hit := bool(report["hit"])
+		var edge: Color = Kit.C_WATER
+		if bool(report["hit"]):
+			edge = Kit.C_DANGER
+		elif bool(report["mission_done"]):
+			edge = Kit.C_SUN
 		report_label.text = _t("report.heading") + ":  " + str(report["text"])
-		report_panel.add_theme_stylebox_override("panel",
-			Kit.flat(Kit.C_PANEL, 8, Kit.C_DANGER if hit else Kit.C_WATER, 2, 10))
+		report_panel.add_theme_stylebox_override("panel", Kit.flat(Kit.C_PANEL, 8, edge, 2, 10))
 
 	# the storm alert
 	alert_panel.visible = not alert.is_empty()
@@ -1127,16 +1244,15 @@ func _refresh() -> void:
 		alert_chance.text = _t("alert.chance", {"dots": alert["dots"]})
 		alert_when.text = _t("alert.when", {"date": _fmt_date(str(alert["date"]))})
 		var stakes := game.storm_stakes(plan)  # numbers only: what a storm WOULD add
-		alert_stakes.text = _t("alert.stakes", {"stay": _num(stakes["stay"]), "shelter": _num(stakes["shelter"])})
-		var sheltering := bool(plan["shelter"])
-		var stars: int = science_before_shelter if sheltering else int(plan["science"])
-		if stars <= 0:
-			alert_cost.text = _t("alert.gives_up_none", {"cost": _n("SHELTER_COST")})
+		alert_stakes.text = _t("alert.stakes")
+		if bool(plan["shelter"]):
+			alert_cost.text = _t("alert.cost_paid")
+		elif int(plan["science"]) > 0:
+			alert_cost.text = _t("alert.cost_science", {"cost": _n("SHELTER_COST"), "science": int(plan["science"])})
 		else:
-			var cost_key := ("gave_up" if sheltering else "gives_up") + ("_one" if stars == 1 else "_many")
-			alert_cost.text = _t("alert." + cost_key, {"stars": stars})
-		var shelter_words := _t("alert.shelter", {"cost": _n("SHELTER_COST")})
-		var stay_words := _t("alert.stay")
+			alert_cost.text = _t("alert.cost", {"cost": _n("SHELTER_COST")})
+		var shelter_words := _t("alert.shelter", {"dose": _num(stakes["shelter"])})
+		var stay_words := _t("alert.stay", {"dose": _num(stakes["stay"])})
 		shelter_button.text = _t("alert.chosen", {"text": shelter_words}) if choice == "shelter" else shelter_words
 		stay_button.text = _t("alert.chosen", {"text": stay_words}) if choice == "stay" else stay_words
 		shelter_button.set_pressed_no_signal(choice == "shelter")
@@ -1207,20 +1323,36 @@ func _base_view_state() -> Dictionary:
 	}
 
 
-func _base_status(alert: Dictionary) -> String:
-	var parts := PackedStringArray()
-	if alert.is_empty():
-		parts.append(_t("rooms.base_quiet"))
-	else:
-		parts.append(_t("rooms.base_alert", {"full_class": alert["full_class"]}))
-	var shield_words := _t("rooms.shield_status", {"shield": game.shield, "max": _n("MAX_SHIELD")})
-	if game.shield >= _n("MAX_SHIELD"):
-		shield_words += " (" + _t("rooms.shield_full") + ")"
-	else:
-		shield_words += " (" + _t("rooms.shield_progress", {"done": game.shield_progress, "cost": _n("SHIELD_COST")}) + ")"
-	parts.append(shield_words)
-	parts.append(_t("rooms.sheltering") if bool(plan["shelter"]) else _t("rooms.in_base"))
-	return " · ".join(parts)
+## The words of a mission: {name, ask, reward}, for the mission line and the reports.
+func _mission_words(mission: Dictionary) -> Dictionary:
+	var id := str(mission["id"])
+	return {
+		"name": _t("missions.names." + id),
+		"ask": _t("missions.asks." + id, {"n": mission.get("at_least", 0)}),
+		"reward": mission["reward"],
+	}
+
+
+func _missions_goal_words(goal: int) -> String:
+	return _t("stars.missions_one") if goal == 1 else _t("stars.missions_many", {"goal": goal})
+
+
+func _set_goal(key: String, reached: bool, words: String) -> void:
+	var row: Dictionary = _goal_rows[key]
+	(row["star"] as StarRow).set_stars([reached])
+	(row["words"] as Label).text = words
+	(row["words"] as Label).add_theme_color_override("font_color", Kit.C_SUN if reached else Kit.C_TEXT)
+
+
+## One star (filled or empty) and a line of words.
+func _star_line(reached: bool, words: String, font_size: int = 18) -> HBoxContainer:
+	var row := Kit.hbox(8)
+	var star := StarRow.new()
+	star.star_size = float(font_size) + 2.0
+	star.set_stars([reached])
+	row.add_child(star)
+	row.add_child(Kit.label(words, font_size, Kit.C_SUN if reached else Kit.C_TEXT, true))
+	return row
 
 
 func _greenhouse_status(recycler_on: bool) -> String:
@@ -1283,8 +1415,8 @@ func _end_turn() -> void:
 	if game.turn == _n("DAY_TURNS") + 1:
 		hint = _t("messages.night_hint")
 	# One sound for the new turn, the most important first: a storm that came,
-	# a new alert, a meter that has just gone low, the all-clear after an alert,
-	# a finished shield layer, or a plain click.
+	# a new alert, a meter that has just gone low, a finished mission, the
+	# all-clear after an alert, a finished shield layer, or a plain click.
 	var cue := "click"
 	var newly_low := false
 	for key in _low_meters():
@@ -1300,7 +1432,9 @@ func _end_turn() -> void:
 		cue = "alert"
 	elif newly_low:
 		cue = "low"
-	elif not report.is_empty():
+	elif not report.is_empty() and bool(report["mission_done"]):
+		cue = "mission"
+	elif not report.is_empty() and bool(report["alert"]):
 		cue = "false_alarm"
 	elif game.shield > shield_before:
 		cue = "shield"
@@ -1308,15 +1442,25 @@ func _end_turn() -> void:
 	_refresh()
 
 
-## What the saved record says about the turn that was just played.
+## What happened on the turn that was just played: the mission, and what the
+## saved record says about the alert. {} when there is nothing to say.
 func _build_turn_report(played_turn: int) -> Dictionary:
-	var cards: Array = game.get_debrief()["storms"]
-	if cards.is_empty():
-		return {}
-	var card: Dictionary = cards[cards.size() - 1]
-	if int(card["turn"]) != played_turn:
-		return {}
+	var d := game.get_debrief()
 	var parts := PackedStringArray()
+	var mission_done := false
+	var missions_played: Array = d["missions"]
+	if not missions_played.is_empty() and int(missions_played[missions_played.size() - 1]["turn"]) == played_turn:
+		var entry: Dictionary = missions_played[missions_played.size() - 1]
+		mission_done = bool(entry["done"])
+		parts.append(_t("missions.done" if mission_done else "missions.missed", {
+			"name": _t("missions.names." + str(entry["id"])), "reward": entry["reward"],
+		}))
+	var cards: Array = d["storms"]
+	if cards.is_empty() or int(cards[cards.size() - 1]["turn"]) != played_turn:
+		if parts.is_empty():
+			return {}
+		return {"text": " ".join(parts), "hit": false, "sheltered": false, "alert": false, "mission_done": mission_done}
+	var card: Dictionary = cards[cards.size() - 1]
 	var causes: Array = card["causes"]
 	if bool(card["followed"]):
 		var shown_caused_it := false
@@ -1334,7 +1478,10 @@ func _build_turn_report(played_turn: int) -> Dictionary:
 	else:
 		parts.append(_t("report.false_alarm", {"full_class": card["full_class"]}))
 		parts.append(_t("report.sheltered_nothing" if bool(card["sheltered"]) else "report.stayed_nothing"))
-	return {"text": " ".join(parts), "hit": bool(card["followed"]), "sheltered": bool(card["sheltered"])}
+	return {
+		"text": " ".join(parts), "hit": bool(card["followed"]), "sheltered": bool(card["sheltered"]),
+		"alert": true, "mission_done": mission_done,
+	}
 
 
 func _toggle_sound() -> void:
@@ -1359,10 +1506,41 @@ func _show_debrief(result: Dictionary) -> void:
 	elif not lost:
 		headline = _t("debrief.won")
 	overlay_content.add_child(Kit.label(headline, 36, Kit.C_SUN, true))
-	var why := _t("debrief.why." + str(result["reason"])) if lost else _t("debrief.why.won")
+	var why := _t("debrief.why." + str(result["reason"])) if lost else _t("debrief.why.won", {"turns": _n("TURNS_PER_LEVEL")})
 	overlay_content.add_child(Kit.label(why, 22, Kit.C_TEXT, true))
+
+	# the three stars of this level, and what each one was for
+	var rating: Dictionary = d["rating"]
+	var progress: Dictionary = d["progress"]
+	var stars_card := Kit.panel(Kit.C_CARD, 12, 8)
+	var stars_box := Kit.vbox(4)
+	stars_card.add_child(stars_box)
+	var stars_head := Kit.hbox(14)
+	var big_stars := StarRow.new()
+	big_stars.star_size = 40.0
+	big_stars.set_stars([bool(rating["safe"]), bool(rating["safe"]) and bool(rating["science"]),
+		bool(rating["safe"]) and bool(rating["missions"])])
+	stars_head.add_child(big_stars)
+	var stars_words := Kit.vbox(0)
+	stars_words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	stars_words.add_child(Kit.label(_t("stars.level_stars", {"n": rating["stars"]}), 24, Kit.C_SUN))
+	stars_words.add_child(Kit.label(_t("stars.total", {
+		"earned": progress["stars_earned"], "possible": progress["stars_possible"],
+	}), 15, Kit.C_MUTED))
+	stars_head.add_child(stars_words)
+	stars_box.add_child(stars_head)
+	if lost:
+		stars_box.add_child(Kit.label(_t("stars.none"), 17, Kit.C_MUTED, true))
+	stars_box.add_child(_star_line(bool(rating["safe"]), _t("stars.safe")))
+	stars_box.add_child(_star_line(not lost and bool(rating["science"]), _t("stars.science_now", {
+		"goal": progress["science_goal"], "now": progress["level_science"],
+	})))
+	stars_box.add_child(_star_line(not lost and bool(rating["missions"]), _t("stars.missions_now", {
+		"text": _missions_goal_words(int(progress["missions_goal"])), "now": progress["missions_done"],
+	})))
+	overlay_content.add_child(stars_card)
 	overlay_content.add_child(Kit.label(_t("debrief.score", {
-		"stars": game.stars, "dose": _num(game.dose), "limit": _n("DOSE_LIMIT"), "shield": game.shield,
+		"science": progress["science"], "dose": _num(game.dose), "limit": _n("DOSE_LIMIT"), "shield": game.shield,
 		"max": _n("MAX_SHIELD"),
 	}), 17, Kit.C_MUTED))
 
@@ -1383,11 +1561,22 @@ func _show_debrief(result: Dictionary) -> void:
 	if first_button == null and lost:
 		first_button = retry_button
 	var again_button := Kit.button(_t("debrief.again"), 280, status == "game_won")
-	again_button.pressed.connect(_start_mission)
+	again_button.pressed.connect(_start_mission.bind(game.mode))
 	buttons.add_child(again_button)
 	if first_button == null:
 		first_button = again_button
 	overlay_content.add_child(buttons)
+
+	# the missions of the turns that were played
+	var mission_log: Array = d["missions"]
+	if not mission_log.is_empty():
+		overlay_content.add_child(Kit.label(_t("missions.debrief_heading"), 24, Kit.C_SUN))
+		for entry in mission_log:
+			var mission_was_done := bool(entry["done"])
+			overlay_content.add_child(Kit.label(
+				_t("missions.debrief_done" if mission_was_done else "missions.debrief_missed", {
+					"turn": entry["turn"], "name": _t("missions.names." + str(entry["id"])), "reward": entry["reward"],
+				}), 17, Kit.C_TEXT if mission_was_done else Kit.C_MUTED))
 
 	# the real flares of this level: only the turns that were played
 	if bool(game.get_level_info()["has_storms"]):
@@ -1405,7 +1594,9 @@ func _show_debrief(result: Dictionary) -> void:
 
 	overlay_content.add_child(Kit.label(_t("debrief.battery_chart"), 24, Kit.C_SUN))
 	overlay_content.add_child(_battery_chart(d))
-	overlay_content.add_child(Kit.label(_t("debrief.battery_chart_note"), 15, Kit.C_MUTED, true))
+	overlay_content.add_child(Kit.label(_t("debrief.battery_chart_note", {
+		"day_end": _n("DAY_TURNS"), "night_start": _n("DAY_TURNS") + 1, "last": _n("TURNS_PER_LEVEL"),
+	}), 15, Kit.C_MUTED, true))
 
 	var moon := _moon_chart(d)
 	if moon != null:

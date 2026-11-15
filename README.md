@@ -1,12 +1,25 @@
 # Lunar Night Shift · Godot 4
 
 A game for kids aged 7 to 12, built for NASA Space Apps 2026 ("Build a Junior
-Astronaut Mission Trainer"). You keep a Moon base running for four levels of
-14 turns. Every turn you share one power budget between life support, the
+Astronaut Mission Trainer"). You keep a Moon base running through the long
+lunar night. Every turn you share one power budget between life support, the
 shield, science, charging the battery and the greenhouse. Real solar flares
 from NASA's DONKI database set off storm alerts: shelter, or stay and do
 science? The real record decides what happened, and the debrief shows the
 real dates.
+
+There are two games on the title screen:
+
+- **Short game:** three levels of 8 turns, no food or water. A good first
+  game for younger players. Its storm levels play 16 real days out of the
+  full game's 28.
+- **Full game:** four levels of 14 turns, with the greenhouse and water.
+
+Every level has **three stars**: keep the crew safe to the end, earn the
+level's science goal, and finish enough **missions**. Mission Control posts
+a mission about twice each day and twice each night (once in the short
+game): a small job for that one turn, such as "put 5 or more power into
+Science", that pays bonus science.
 
 It grew out of the **Orbit 27 controls prototype** and keeps its look: the
 full-screen artwork, the top bar and the bottom bar. The main view is the
@@ -30,21 +43,32 @@ godot --headless --path . --script res://tests/run_tests.gd
 ```
 
 The tests include the acceptance test: ten fixed strategies must finish with
-exactly the stars, radiation and shield that `tools/balance_sim.py` prints
-(HANDOVER.md section 9.2).
+exactly the science ("stars" in the simulator), radiation and shield that
+`tools/balance_sim.py` prints (HANDOVER.md section 9.2). The short game, the
+missions and the three stars are not in the simulator. They are kept apart
+from its numbers: mission rewards go to a separate bonus count, and the
+short game only overrides the number of turns.
 
 ## How a turn works
 
-- **Day (turns 1 to 7):** the sun gives 10 power. Power you don't spend is lost.
-- **Night (turns 8 to 14):** only the battery. Charge it by day.
+- **Day (turns 1 to 7; 1 to 4 in the short game):** the sun gives 10 power.
+  Power you don't spend is lost.
+- **Night (turns 8 to 14; 5 to 8 in the short game):** only the battery.
+  Charge it by day.
 - **Life support:** 3 holds Air steady and runs the water recycler.
 - **Shield:** 8 power builds one layer. It lasts for the whole game.
-- **Science:** 1 power is 1 star. Stars are the score.
+- **Science:** 1 power is 1 science. Each level has a science goal.
+- **Missions:** the line above the controls shows this turn's mission, or
+  when the next one comes. It turns gold when your plan does it. A science
+  mission can't be done from the shelter.
 - **Greenhouse (from Level 2):** grows 3 food; 1 power by day, 4 at night.
-- **Storm alert (Levels 3 and 4):** you see the flare class, a chance in
-  dots out of 10, what a storm would add to Radiation in the base and in the
-  shelter, and the stars sheltering gives up. Never the outcome. Shelter
+- **Storm alert (the storm levels):** you see the flare class, a chance in
+  dots out of 10, and two buttons that each say what a storm would add to
+  Radiation: in the shelter, or in the main base. Never the outcome. Shelter
   costs 1 power and the turn's science.
+
+The controls sit in three boxes: **Keep the base running** (life support,
+charging, greenhouse), **Protect the crew** (shield) and **Do science**.
 
 ## Add your artwork
 
@@ -67,14 +91,14 @@ fill the 1280 × 720 canvas.
 
 | File | What it is |
 | --- | --- |
-| `game_numbers.gd` | Every game number, each tagged `[TUNE]`. Change one only with the simulator. |
+| `game_numbers.gd` | Every game number, each tagged `[TUNE]`. Change one only with the simulator. Also the short game's levels, the star goals and the mission list, which the simulator does not have. |
 | `game_text.gd` | Every word a player reads. Unchecked science facts are marked `TODO(verify)`. |
 | `storms_data.gd` | Saved NASA data. **Generated** by `tools/build_storms.py`; never edit by hand. |
-| `game_state.gd` | The rules. No nodes, no randomness. The only reader of whether a storm followed. |
+| `game_state.gd` | The rules, for both games, with the missions and the stars. No nodes, no randomness. The only reader of whether a storm followed. |
 | `main.gd`, `main.tscn` | The screen: draws the state, reads clicks, calls the rules. |
 | `ui_kit.gd` | Colours and small builders, so the look lives in one place. |
 | `moon_base_view.gd` | The picture of the Moon base, drawn from the meters and the plan. |
-| `bar_chart.gd`, `dot_row.gd` | The debrief charts and the dots (storm chance, shield layers). |
+| `bar_chart.gd`, `dot_row.gd`, `star_row.gd` | The debrief charts, the dots (storm chance, shield layers) and the stars. |
 | `live_sun.gd` | "The Sun right now" on the title screen: live DONKI fetch with a saved fallback. |
 | `sound_fx.gd` | Plays the files in `sound_effects/`, with a mute button. A missing file falls back to a beep made in code. |
 | `tests/run_tests.gd` | Unit tests, no-peeking tests and the simulator parity test. |

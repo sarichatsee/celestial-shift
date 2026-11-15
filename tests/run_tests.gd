@@ -1048,6 +1048,296 @@ func test_parity_with_the_balance_simulator() -> void:
 	done()
 
 
+# ---------------------------------------------------------------- the short game
+func short_game(mission_seed: int = 0) -> GameState:
+	var g := GameState.new()
+	g.mission_seed = mission_seed
+	g.set_mode("short")
+	return g
+
+
+## A short game at the start of level n, after careful play that shelters on every alert.
+func short_at_level(n: int) -> GameState:
+	var g := short_game()
+	while g.level < n:
+		eq(play_careful(g, 8, true), {"status": "level_won"}, "on the way to short level %d" % n)
+		g.next_level()
+	return g
+
+
+func test_the_short_game_has_three_levels_of_eight_turns() -> void:
+	var g := short_game()
+	var st := g.get_state()
+	eq([st["level_count"], st["turns_per_level"]], [3, 8])
+	var days: Array = []
+	for i in 8:
+		days.append(g.is_day())
+		play_careful(g, 1)
+	eq(days, [true, true, true, true, false, false, false, false])
+	for level in Numbers.LEVELS_SHORT:
+		check(not bool(level["food"]), "no food or water in the short game")
+	# every other number is the full game's, and the full game's are untouched
+	for key in Numbers.DEFAULTS:
+		if not Numbers.SHORT.has(key):
+			eq(g.p[key], Numbers.DEFAULTS[key], str(key))
+	eq([Numbers.DEFAULTS["TURNS_PER_LEVEL"], Numbers.DEFAULTS["DAY_TURNS"]], [14, 7])
+	g.set_mode("full")
+	eq([g.get_state()["level_count"], g.get_state()["turns_per_level"], g.level, g.turn], [4, 14, 1, 1])
+	done()
+
+
+func test_the_short_game_shows_the_same_real_flares_on_the_same_real_days() -> void:
+	# [short level, the full game's level with the same window, turns skipped]
+	for pair in [[2, 3, 4], [3, 4, 2]]:
+		var short := short_at_level(int(pair[0]))
+		var full := at_level(int(pair[1]))
+		var skipped := int(pair[2])
+		eq(int(Numbers.LEVELS_SHORT[int(pair[0]) - 1]["offset"]), skipped)
+		eq(short.get_level_info()["window_start"], full.turn_dates(skipped + 1)["from"])
+		var alerts := 0
+		for t in range(1, 9):
+			short.turn = t
+			full.turn = t + skipped
+			eq(short.alert_for_turn(), full.alert_for_turn(), "short level %d turn %d" % [pair[0], t])
+			eq(short.turn_dates(t), full.turn_dates(t + skipped), "dates of turn %d" % t)
+			if not short.alert_for_turn().is_empty():
+				alerts += 1
+		check(alerts >= 2, "the short level has alerts")
+	# the days the Science page names
+	eq(short_at_level(2).turn_dates(1)["from"], "2024-01-21")
+	eq(short_at_level(2).turn_dates(8)["to"], "2024-02-05")
+	eq(short_at_level(3).turn_dates(1)["from"], "2024-05-09")
+	eq(short_at_level(3).turn_dates(8)["to"], "2024-05-24")
+	done()
+
+
+func test_the_short_game_storms_follow_the_real_record() -> void:
+	var g := short_at_level(2)
+	var gains := {}
+	for t in range(1, 9):
+		var before := g.dose
+		var had_alert := not g.alert_for_turn().is_empty()
+		play_careful(g, 1)  # stays in the main base
+		if had_alert:
+			gains[t] = g.dose - before
+	# 23 January 2024: an M5.1 flare, no storm. 29 January: an M6.8 flare, and a storm.
+	eq(gains, {2: 0.0, 5: 20.0})
+	var d := g.get_debrief()
+	eq(d["storm_turns"], [5])
+	var saved: Array = StormsData.DATA["windows"]["space_weather"][0]["moon_dose"]
+	eq(d["moon_dose"], saved.slice(4, 12))
+	done()
+
+
+func test_the_short_game_can_be_won_and_lost() -> void:
+	var g := short_at_level(3)
+	eq(play_careful(g, 8, true), {"status": "game_won"})
+	eq(g.ratings.size(), 3)
+	var lost := short_game()
+	eq(play(lost, 3, plan({"life_support": 0})), {"status": "lost", "reason": "air"})
+	eq(lost.ratings, [])
+	done()
+
+
+# ---------------------------------------------------------------- missions and stars
+## A legal plan that does the mission posted for this turn.
+func mission_plan(g: GameState) -> Dictionary:
+	var mission := g.mission_for_turn()
+	var pl := plan({"life_support": 3})
+	if str(mission["key"]) == "greenhouse":
+		pl["greenhouse"] = true
+	else:
+		pl[str(mission["key"])] = int(mission["at_least"])
+	return pl
+
+
+## The turns of the current level that have a mission, with each mission's id.
+func posted(g: GameState) -> Dictionary:
+	var found := {}
+	var kept := g.turn
+	for t in range(1, int(g.p["TURNS_PER_LEVEL"]) + 1):
+		g.turn = t
+		if not g.mission_for_turn().is_empty():
+			found[t] = str(g.mission_for_turn()["id"])
+	g.turn = kept
+	return found
+
+
+func test_missions_come_twice_by_day_and_twice_by_night() -> void:
+	for mission_seed in 6:
+		var g := GameState.new()
+		g.mission_seed = mission_seed
+		g.start_game()
+		for level in range(1, 5):
+			var found := posted(g)
+			var by_day := 0
+			for t in found:
+				var mission: Dictionary = {}
+				for m in Numbers.MISSIONS:
+					if str(m["id"]) == str(found[t]):
+						mission = m
+				if int(t) <= 7:
+					by_day += 1
+				check(str(mission["when"]) in ["any", "day" if int(t) <= 7 else "night"], "%s on turn %d" % [found[t], t])
+				check(g.has_food() or not bool(mission["food"]), "%s needs the greenhouse" % str(found[t]))
+			eq([found.size(), by_day], [4, 2], "seed %d level %d" % [mission_seed, level])
+			check(not (level == 1 and found.has(1)), "the first turn of the game is free")
+			eq(g.get_progress()["missions_posted"], 4)
+			if level < 4:
+				eq(play_careful(g, 14, true), {"status": "level_won"})
+				g.next_level()
+	var short := short_game(3)
+	var found_short := posted(short)
+	eq(found_short.size(), 2)
+	done()
+
+
+func test_missions_depend_only_on_the_seed() -> void:
+	var a := GameState.new()
+	var b := GameState.new()
+	a.mission_seed = 7
+	b.mission_seed = 7
+	a.start_game()
+	b.start_game()
+	eq(posted(a), posted(b))
+	var kinds := {}
+	for mission_seed in 12:
+		var g := GameState.new()
+		g.mission_seed = mission_seed
+		g.start_game()
+		kinds[var_to_str(posted(g))] = true
+	check(kinds.size() > 6, "different seeds give different missions")
+	# a retry brings the same missions back
+	var before := posted(a)
+	play_careful(a, 3)
+	a.retry_level()
+	eq(posted(a), before)
+	done()
+
+
+func test_a_finished_mission_pays_bonus_science_and_nothing_else() -> void:
+	var g := new_game()
+	g._missions = {1: "big_experiment", 2: "charge_up"}
+	var mission := g.mission_for_turn()
+	eq([mission["id"], mission["key"], mission["at_least"], mission["reward"]], ["big_experiment", "science", 5, 4])
+	check(not g.mission_met(plan({"life_support": 3, "science": 4})), "4 is not enough")
+	check(g.mission_met(mission_plan(g)), "5 does it")
+	eq(g.next_mission()["turn"], 2)
+	eq(g.next_mission()["mission"]["id"], "charge_up")
+	play(g, 1, mission_plan(g))
+	eq([g.stars, g.bonus, g.missions_done, g.level_science()], [5, 4, 1, 9])
+	# turn 2: missed
+	play(g, 1, plan({"life_support": 3, "charge": 4}))
+	eq([g.stars, g.bonus, g.missions_done], [5, 4, 1])
+	eq(g.next_mission(), {})
+	var log: Array = g.get_debrief()["missions"]
+	eq(log, [
+		{"turn": 1, "id": "big_experiment", "done": true, "reward": 4},
+		{"turn": 2, "id": "charge_up", "done": false, "reward": 3},
+	])
+	# a turn with no mission pays nothing
+	check(g.mission_for_turn().is_empty() and not g.mission_met(plan({"science": 7})), "no mission on turn 3")
+	done()
+
+
+func test_missions_never_change_what_the_simulator_counts() -> void:
+	var a := GameState.new()
+	var b := GameState.new()
+	a.start_game()
+	b.start_game()
+	a._missions = {2: "sample_run", 3: "dig_crew", 9: "night_survey"}
+	b._missions = {}  # no missions at all
+	for i in 14:
+		var pl := careful_plan(a)
+		a.take_turn(pl)
+		b.take_turn(pl)
+		eq(a.get_state(), b.get_state(), "turn %d" % (i + 1))
+	check(a.bonus > 0 and b.bonus == 0, "only the bonus differs")
+	done()
+
+
+func test_a_science_mission_cannot_be_done_from_the_shelter() -> void:
+	var g := at_level(3)
+	until_turn(g, 6)  # a real alert
+	g._missions = {6: "sample_run"}
+	check(g.mission_met(plan({"life_support": 3, "science": 3})), "staying and doing science does it")
+	check(not g.mission_met(plan({"life_support": 3, "shelter": true})), "sheltering does not")
+	done()
+
+
+func test_the_dig_crew_gets_other_work_when_the_shield_is_full() -> void:
+	var g := new_game()
+	g._missions = {1: "dig_crew"}
+	eq(g.mission_for_turn()["key"], "shield")
+	g.shield = 3
+	eq(g.mission_for_turn()["id"], Numbers.MISSION_WHEN_SHIELD_FULL)
+	eq(g.check_plan(mission_plan(g)), "ok")
+	done()
+
+
+func test_missions_never_read_the_storm_record() -> void:
+	var a := at_level(3)
+	var b := at_level(3)
+	for record in b.storms["windows"]["space_weather"][0]["turns"]:
+		record["followed"] = not bool(record["followed"])
+	eq(posted(a), posted(b))
+	for t in posted(a):
+		a.turn = int(t)
+		b.turn = int(t)
+		eq(a.mission_met(mission_plan(a)), b.mission_met(mission_plan(b)))
+	done()
+
+
+func test_three_stars_safe_science_and_missions() -> void:
+	var g := new_game()
+	g._missions = {2: "sample_run", 3: "charge_up", 9: "night_survey", 10: "deep_clean"}
+	# nothing is earned before the level is finished
+	eq(g.get_rating(), {"safe": false, "science": false, "missions": false, "stars": 0})
+	eq(g.get_progress()["science_goal"], Numbers.LEVELS[0]["science_goal"])
+	eq(g.get_progress()["missions_goal"], 2)
+	# day: 2 science a turn. Turn 2 has no 3 science, turn 3 charges 5.
+	for t in range(1, 8):
+		play(g, 1, plan({"life_support": 3, "science": 2, "charge": 5}))
+	eq([g.stars, g.missions_done, g.bonus], [14, 1, 3])
+	# night: the survey on turn 9
+	for t in range(8, 15):
+		var result := g.take_turn(plan({"life_support": 3, "science": 3 if t == 9 else 0}))
+		if t == 14:
+			eq(result, {"status": "level_won"})
+	eq([g.stars, g.missions_done, g.bonus, g.level_science()], [17, 2, 7, 24])
+	eq(g.get_rating(), {"safe": true, "science": true, "missions": true, "stars": 3})
+	eq(g.ratings, [3])
+	eq(g.get_debrief()["rating"]["stars"], 3)
+	# the next level starts its own count
+	g.next_level()
+	eq([g.level_science(), g.missions_done, g.bonus, g.get_progress()["science"]], [0, 0, 7, 24])
+	eq([g.get_progress()["stars_earned"], g.get_progress()["stars_possible"]], [3, 12])
+	done()
+
+
+func test_a_level_with_no_science_and_no_missions_earns_one_star() -> void:
+	var g := new_game()
+	g._missions = {}
+	for t in range(1, 8):
+		play(g, 1, plan({"life_support": 3, "charge": 5}))
+	eq(play(g, 7, plan({"life_support": 3})), {"status": "level_won"})
+	eq(g.get_rating(), {"safe": true, "science": false, "missions": false, "stars": 1})
+	done()
+
+
+func test_a_lost_level_earns_no_stars_and_a_retry_takes_the_bonus_back() -> void:
+	var g := new_game()
+	g._missions = {1: "big_experiment"}
+	play(g, 1, plan({"life_support": 3, "science": 7}))
+	eq([g.bonus, g.missions_done], [4, 1])
+	eq(play(g, 3, plan({"life_support": 0})), {"status": "lost", "reason": "air"})
+	eq(g.get_rating()["stars"], 0)
+	eq(g.ratings, [])
+	g.retry_level()
+	eq([g.stars, g.bonus, g.missions_done, g.level_science(), g.get_debrief()["missions"]], [0, 0, 0, 0, []])
+	done()
+
+
 # ---------------------------------------------------------------- words and sources
 func _says(text: Variant, number: Variant) -> void:
 	var regex := RegEx.create_from_string("(^|[^0-9.])" + str(number).replace(".", "\\.") + "([^0-9]|$)")
@@ -1073,7 +1363,10 @@ func test_numbers_written_in_the_words_match_the_numbers() -> void:
 	_says(t["levels"][0]["intro"], n["DAY_TURNS"])
 	_says(t["levels"][1]["intro"], n["FOOD_START"])
 	_says(t["levels"][1]["intro"], n["FOOD_EATEN"])
-	_says(t["debrief"]["why"]["won"], n["TURNS_PER_LEVEL"])
+	check(str(t["debrief"]["why"]["won"]).contains("{turns}"), "the win line takes the number of turns")
+	# the short game's first level says its own numbers
+	_says(t["levels_short"][0]["intro"], n["SOLAR_POWER"])
+	_says(t["levels_short"][0]["intro"], Numbers.SHORT["DAY_TURNS"])
 	# the storm odds on the Science page are the saved counts
 	var odds: String = t["science"]["rows"][1]["real"]
 	var chance: Dictionary = StormsData.DATA["chance"]
@@ -1086,6 +1379,11 @@ func test_words_are_complete_and_honest() -> void:
 	var t: Dictionary = GameText.TEXT
 	eq(t["title"]["how_to"].size(), 3)
 	eq(t["levels"].size(), Numbers.LEVELS.size())
+	eq(t["levels_short"].size(), Numbers.LEVELS_SHORT.size())
+	for mission in Numbers.MISSIONS:
+		var id := str(mission["id"])
+		check(str(t["missions"]["names"].get(id, "")) != "" and str(t["missions"]["asks"].get(id, "")) != "",
+			"words for the mission " + id)
 	for reason in ["air", "dose", "food", "water"]:
 		check(str(t["debrief"]["why"][reason]) != "", reason)
 	for row in t["science"]["rows"]:

@@ -7,6 +7,14 @@
 > replaced by the Godot scripts listed in `README.md`: the same functions exist in `game_state.gd` with
 > snake_case names, and `tools/build_storms.py` now writes `storms_data.gd`. The browser build stays on the
 > `lunar-night-shift` branch.
+>
+> **Added 2026-11-15, Godot only.** A short game (three levels of 8 turns, no food or water, playing
+> turns 5 to 12 of the Space Weather window and turns 3 to 10 of The Big One window), missions (a job for
+> one turn that pays bonus science) and three stars per level (safe, science goal, missions). None of
+> this is in `tools/balance_sim.py`. It never changes the numbers in sections 4 and 9: the full game's
+> `stars` still counts only science power, mission rewards go to a separate `bonus`, and the parity
+> table is tested as before. The new numbers are in `game_numbers.gd` (`SHORT`, `LEVELS_SHORT`,
+> `MISSIONS`, and each level's `science_goal` and `missions_goal`).
 
 You are building **Lunar Night Shift**, a browser game for kids aged 7 to 12, for the NASA Space Apps 2026 hackathon. This file is your complete brief. It replaces the two planning PDFs, which aren't in the repo. Read all of it before you write code.
 

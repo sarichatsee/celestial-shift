@@ -1,5 +1,6 @@
 extends RefCounted
-## The rules of Lunar Night Shift. No nodes, no drawing, no randomness.
+## The rules of Lunar Night Shift. No nodes, no drawing, no randomness: which
+## missions are posted on which turns is worked out from `mission_seed` alone.
 ##
 ## The reference implementation is tools/balance_sim.py. take_turn() follows
 ## HANDOVER.md section 4.7 step by step, and tests/run_tests.gd checks the
@@ -12,6 +13,11 @@ extends RefCounted
 ##
 ## A plan is a Dictionary:
 ##   {"life_support": 3, "shield": 0, "science": 2, "charge": 4, "shelter": false, "greenhouse": true}
+##
+## STARS AND MISSIONS are extra rules the simulator does not have. They never
+## touch the simulator's numbers: a mission's reward goes to `bonus`, not `stars`,
+## and everything about them is read through get_progress(), not get_state().
+## Missions never look at the storm record.
 
 const Numbers = preload("res://game_numbers.gd")
 const StormsData = preload("res://storms_data.gd")
@@ -34,8 +40,16 @@ var water := 0
 var dose := 0.0
 var shield := 0
 var shield_progress := 0
-var stars := 0
+var stars := 0  # science from the Science control: what the simulator counts
 
+var mode := "full"  # "full" (four levels of 14 turns) or "short" (three levels of 8)
+var mission_seed := 0  # decides which missions are posted when; the same seed, the same game
+var bonus := 0  # science from missions
+var missions_done := 0  # missions finished on this level
+var ratings: Array = []  # stars (0 to 3) for each level finished so far, by level index
+
+var _missions := {}  # this level: turn -> mission id
+var _mission_log: Array = []  # this level: {turn, id, done, reward} for the turns played
 var _phase := "playing"  # "playing", or the status that ended the level
 var _history: Array = []
 var _storm_log: Array = []
@@ -54,11 +68,26 @@ static func new_plan() -> Dictionary:
 
 
 # ---------------------------------------------------------------- levels
+## Choose the full or the short game. Resets every number to that game's own
+## and starts at Level 1.
+func set_mode(new_mode: String) -> void:
+	mode = "short" if new_mode == "short" else "full"
+	p = Numbers.DEFAULTS.duplicate(true)
+	if mode == "short":
+		p.merge(Numbers.SHORT, true)
+		levels = Numbers.LEVELS_SHORT.duplicate(true)
+	else:
+		levels = Numbers.LEVELS.duplicate(true)
+	start_game()
+
+
 func start_game() -> void:
 	dose = 0.0
 	shield = 0
 	shield_progress = 0
 	stars = 0
+	bonus = 0
+	ratings = []
 	_start_level(1)
 
 
@@ -73,8 +102,13 @@ func _start_level(n: int) -> void:
 	_history = []
 	_storm_log = []
 	_phase = "playing"
-	_level_start = {"dose": dose, "shield": shield, "shield_progress": shield_progress, "stars": stars}
+	_level_start = {
+		"dose": dose, "shield": shield, "shield_progress": shield_progress, "stars": stars, "bonus": bonus,
+	}
 	_last_result = {}
+	missions_done = 0
+	_mission_log = []
+	_missions = _plan_missions(n)
 
 
 ## Same level again, with the dose, shield and stars it started with.
@@ -83,6 +117,7 @@ func retry_level() -> void:
 	shield = int(_level_start["shield"])
 	shield_progress = int(_level_start["shield_progress"])
 	stars = int(_level_start["stars"])
+	bonus = int(_level_start["bonus"])
 	_start_level(level)
 
 
@@ -148,14 +183,25 @@ func get_level_info() -> Dictionary:
 	var window := _storm_window(level)
 	var start := ""
 	if not window.is_empty():
-		start = str(window["start"])
+		start = _add_days(str(window["start"]), 2 * _offset())
 	return {
 		"index": level - 1,
-		"name": str(GameText.TEXT["levels"][level - 1]["name"]),
+		"name": str(level_text()["name"]),
 		"has_food": has_food(),
 		"has_storms": not window.is_empty(),
 		"window_start": start,
 	}
+
+
+## The words for the current level (name, intro): the short game has its own.
+func level_text() -> Dictionary:
+	return GameText.TEXT["levels_short" if mode == "short" else "levels"][level - 1]
+
+
+## How many turns of the saved window this level skips (the short game plays
+## 16 of the 28 real days).
+func _offset() -> int:
+	return int(levels[level - 1].get("offset", 0))
 
 
 ## The real dates a turn covers: {"from": "2024-01-23", "to": "2024-01-24"}, both days
@@ -164,7 +210,7 @@ func turn_dates(for_turn: int) -> Dictionary:
 	var window := _storm_window(level)
 	if window.is_empty():
 		return {}
-	var start := str(window["start"])
+	var start := _add_days(str(window["start"]), 2 * _offset())
 	return {"from": _add_days(start, 2 * (for_turn - 1)), "to": _add_days(start, 2 * for_turn - 1)}
 
 
@@ -222,6 +268,9 @@ func take_turn(plan: Dictionary) -> Dictionary:
 	var with_food := has_food()
 	var life_support := int(plan["life_support"])
 	var sheltered := bool(plan["shelter"])
+	# the mission is judged on the plan as it was sent, before anything changes
+	var mission := mission_for_turn()
+	var mission_done := not mission.is_empty() and mission_met(plan)
 	# 2. at night the battery pays; by day the sun does
 	if not day:
 		battery -= float(total_spend(plan))
@@ -232,6 +281,13 @@ func take_turn(plan: Dictionary) -> Dictionary:
 	# 5. science
 	if not sheltered:
 		stars += int(plan["science"])
+	if not mission.is_empty():
+		_mission_log.append({
+			"turn": turn, "id": str(mission["id"]), "done": mission_done, "reward": int(mission["reward"]),
+		})
+		if mission_done:
+			bonus += int(mission["reward"])
+			missions_done += 1
 	# 6. charging
 	if day:
 		battery = minf(float(p["BATTERY_MAX"]), battery + float(int(plan["charge"])) * float(p["CHARGE_EFFICIENCY"]))
@@ -306,7 +362,141 @@ func _resolve_storm(sheltered: bool) -> void:
 func _end(result: Dictionary) -> Dictionary:
 	_phase = str(result["status"])
 	_last_result = result
+	if _phase in ["level_won", "game_won"]:
+		while ratings.size() < level:
+			ratings.append(0)
+		ratings[level - 1] = int(get_rating()["stars"])
 	return result
+
+
+# ---------------------------------------------------------------- stars and missions
+## Science earned on this level so far, missions included.
+func level_science() -> int:
+	return (stars + bonus) - (int(_level_start["stars"]) + int(_level_start["bonus"]))
+
+
+## Everything the screen shows about science, missions and stars.
+func get_progress() -> Dictionary:
+	var info: Dictionary = levels[level - 1]
+	var earned := 0
+	for count in ratings:
+		earned += int(count)
+	return {
+		"science": stars + bonus,  # the whole game so far
+		"bonus": bonus,
+		"level_science": level_science(),
+		"science_goal": int(info.get("science_goal", 0)),
+		"missions_done": missions_done,
+		"missions_goal": int(info.get("missions_goal", 0)),
+		"missions_posted": _missions.size(),
+		"stars_earned": earned,  # on the levels finished so far
+		"stars_possible": 3 * levels.size(),
+	}
+
+
+## The three stars of this level:
+##   safe      the crew finished the level
+##   science   the level's science goal was reached
+##   missions  enough missions were finished
+## A level that was not finished earns no stars, whatever else was done.
+func get_rating() -> Dictionary:
+	var progress := get_progress()
+	var safe := _phase in ["level_won", "game_won"]
+	var science := int(progress["level_science"]) >= int(progress["science_goal"])
+	var missions := int(progress["missions_done"]) >= int(progress["missions_goal"])
+	var count := 0
+	if safe:
+		count = 1 + int(science) + int(missions)
+	return {"safe": safe, "science": science, "missions": missions, "stars": count}
+
+
+## The mission posted for this turn: {id, key, at_least, reward}, or {}.
+func mission_for_turn() -> Dictionary:
+	return _mission_on(turn)
+
+
+## The next mission still to come on this level: {turn, mission}, or {}.
+## Missions are made up for the game, so showing one early gives nothing away.
+func next_mission() -> Dictionary:
+	for t in range(turn + 1, int(p["TURNS_PER_LEVEL"]) + 1):
+		if _missions.has(t):
+			return {"turn": t, "mission": _mission_on(t)}
+	return {}
+
+
+## Would this plan finish this turn's mission? Reads only the plan.
+func mission_met(plan: Dictionary) -> bool:
+	var mission := mission_for_turn()
+	if mission.is_empty():
+		return false
+	var key := str(mission["key"])
+	if key == "greenhouse":
+		return bool(plan.get("greenhouse", false))
+	if key == "science" and bool(plan.get("shelter", false)):
+		return false  # no science is done from the shelter
+	return int(plan.get(key, 0)) >= int(mission["at_least"])
+
+
+func _mission_on(a_turn: int) -> Dictionary:
+	if not _missions.has(a_turn):
+		return {}
+	var id := str(_missions[a_turn])
+	if id == "dig_crew" and shield >= int(p["MAX_SHIELD"]):
+		id = Numbers.MISSION_WHEN_SHIELD_FULL
+	for mission in Numbers.MISSIONS:
+		if str(mission["id"]) == id:
+			return mission.duplicate()
+	return {}
+
+
+## Which missions are posted on which turns of level n. It depends only on
+## `mission_seed`, the game mode and the level, so retrying a level brings the
+## same missions back. The very first turn of the game is left free, to learn
+## the controls.
+func _plan_missions(n: int) -> Dictionary:
+	var info: Dictionary = levels[n - 1]
+	var per_half := int(info.get("missions_per_half", 0))
+	var planned := {}
+	if per_half <= 0:
+		return planned
+	var key := "%d:%d:%s" % [mission_seed, n, mode]
+	var day_turns := int(p["DAY_TURNS"])
+	var last_turn := int(p["TURNS_PER_LEVEL"])
+	var with_food := bool(info["food"])
+	var used: Array = []
+	for half: String in ["day", "night"]:
+		var first := 1 if half == "day" else day_turns + 1
+		var final := day_turns if half == "day" else last_turn
+		var turns: Array = []
+		for t in range(first, final + 1):
+			if not (n == 1 and t == 1):
+				turns.append(t)
+		_shuffle(turns, key + ":turns:" + half)
+		var pool: Array = []
+		for mission in Numbers.MISSIONS:
+			var fits_time := str(mission["when"]) == "any" or str(mission["when"]) == half
+			if fits_time and (with_food or not bool(mission["food"])):
+				pool.append(str(mission["id"]))
+		_shuffle(pool, key + ":pool:" + half)
+		for i in mini(per_half, turns.size()):
+			# a mission not yet used on this level, if there is one
+			var id := str(pool[i % pool.size()])
+			for candidate in pool:
+				if not used.has(candidate):
+					id = str(candidate)
+					break
+			used.append(id)
+			planned[int(turns[i])] = id
+	return planned
+
+
+## Mixes a list in an order that depends only on `key`: the same key, the same order.
+func _shuffle(list: Array, key: String) -> void:
+	for i in range(list.size() - 1, 0, -1):
+		var j := int(absi(hash("%s:%d" % [key, i])) % (i + 1))
+		var kept: Variant = list[i]
+		list[i] = list[j]
+		list[j] = kept
 
 
 # ---------------------------------------------------------------- debrief
@@ -357,9 +547,10 @@ func get_debrief(result: Dictionary = {}) -> Dictionary:
 	if not window.is_empty() and window.get("moon_dose") != null:
 		var values: Array = []
 		var saved: Array = window["moon_dose"]
-		for i in saved.size():
-			if i < played:
-				values.append(saved[i])
+		for i in int(p["TURNS_PER_LEVEL"]):
+			var at := i + _offset()
+			if i < played and at < saved.size():
+				values.append(saved[at])
 			else:
 				values.append(null)
 		moon_dose = values
@@ -390,6 +581,9 @@ func get_debrief(result: Dictionary = {}) -> Dictionary:
 		"recycler_saved": recycler_saved,
 		"tip_key": tip_key,
 		"tip": str(GameText.TEXT["tips"][tip_key]),
+		"rating": get_rating(),
+		"progress": get_progress(),
+		"missions": _mission_log.duplicate(true),
 	}
 
 
@@ -416,7 +610,7 @@ func _storm_this_turn() -> Dictionary:
 	if window.is_empty():
 		return {}
 	for record in window["turns"]:
-		if int(record["turn"]) == turn:
+		if int(record["turn"]) == turn + _offset():
 			return record
 	return {}
 

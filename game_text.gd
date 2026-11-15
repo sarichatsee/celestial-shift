@@ -20,7 +20,10 @@ const TEXT := {
 			"Night is coming. Charge the battery while it's light.",
 			"Real solar flares set off alerts. Shelter, or stay and do science?",
 		],
-		"start": "Start the mission",
+		"start_short": "Short game",
+		"start_full": "Full game",
+		"short_note": "{levels} levels of {turns} turns. A good first game.",
+		"full_note": "{levels} levels of {turns} turns, with food and water.",
 		"science": "Science Behind It",
 		"back": "Back",
 		"disclaimer": "Not made or endorsed by NASA. Uses public NASA data.",
@@ -44,6 +47,65 @@ const TEXT := {
 			"intro": "May 2024: big flares came almost every turn. Is it better to build a shield, or to shelter each time? Power is short. Choose with care.",
 		},
 	],
+	# The short game: the same base and the same real flares, in fewer turns.
+	"levels_short": [
+		{
+			"name": "First Night",
+			"intro": "Welcome to the Moon base! The sun gives 10 power each turn, but only for 4 turns. Then comes night: 4 turns on battery power alone. Air needs power every turn.",
+		},
+		{
+			"name": "Space Weather",
+			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. Shelter to stay safe, or stay and do science. Radiation never goes away.",
+		},
+		{
+			# TODO(verify): how the May 2024 storm is described. This wording only says what the saved DONKI alerts show.
+			"name": "The Big One",
+			"intro": "May 2024: big flares came turn after turn. Build a shield, or shelter each time? Choose with care.",
+		},
+	],
+	# The three stars of a level, and the missions. Both are made up for the game.
+	"stars": {
+		"heading": "EARN 3 STARS",
+		"safe": "Keep the crew safe to the end",
+		"science": "Earn {goal} science",
+		"science_now": "Earn {goal} science (you have {now})",
+		"missions_one": "Finish 1 mission",
+		"missions_many": "Finish {goal} missions",
+		"missions_now": "{text} ({now} done)",
+		"total": "Whole game: {earned} of {possible} stars",
+		"level_stars": "{n} of 3 stars",
+		"none": "No stars this time. Stars are for levels you finish.",
+	},
+	"missions": {
+		"line": "MISSION  {name}: {ask}  (+{reward} science)",
+		"ready": "MISSION READY  {name}: your plan does it!  (+{reward} science)",
+		"next": "Next mission: {name}, on turn {turn}.",
+		"none_left": "No more missions on this level.",
+		"done": "Mission done: {name}. Science +{reward}.",
+		"missed": "Mission missed: {name}.",
+		"debrief_heading": "Missions",
+		"debrief_done": "Turn {turn}: {name}, done (+{reward} science)",
+		"debrief_missed": "Turn {turn}: {name}, missed",
+		"names": {
+			"sample_run": "Sample run",
+			"big_experiment": "Big experiment",
+			"night_survey": "Night survey",
+			"charge_up": "Charge up",
+			"deep_clean": "Fresh air",
+			"dig_crew": "Dig crew",
+			"night_harvest": "Night harvest",
+		},
+		# {n} is the mission's amount, from game_numbers.gd
+		"asks": {
+			"sample_run": "put {n} or more power into Science",
+			"big_experiment": "put {n} or more power into Science",
+			"night_survey": "put {n} or more power into Science tonight",
+			"charge_up": "put {n} or more power into the battery",
+			"deep_clean": "set Life support to {n} or more",
+			"dig_crew": "put {n} or more power into the Shield",
+			"night_harvest": "run the greenhouse tonight",
+		},
+	},
 	"intro": {
 		"level": "LEVEL {n} OF {total}",
 		"real_dates": "This month really happened: {from} to {to}.",
@@ -59,7 +121,7 @@ const TEXT := {
 		"look_inside": "Look inside",
 		"close": "X",
 		"no_alert": "No storm alert this turn.",
-		"stars_so_far": "Stars so far: {stars}",
+		"science_so_far": "Science on this level: {science} of {goal}",
 		# the first line of each building's card: what the building is for in the game
 		"about": {
 			"solar": "By day the sun gives {solar} power every turn. At night the panels make nothing.",
@@ -72,8 +134,6 @@ const TEXT := {
 		},
 		"base_placeholder": "MOON BASE",
 		"greenhouse_placeholder": "GREENHOUSE / STATE {state}",
-		"base_quiet": "No flare alert this turn",
-		"base_alert": "Flare alert: {full_class}",
 		# the small signs under each building in the Moon base picture
 		"labels": {
 			"solar": "Solar panels",
@@ -84,11 +144,8 @@ const TEXT := {
 			"greenhouse": "Greenhouse",
 			"water": "Water",
 		},
-		"shield_status": "Shield {shield} of {max}",
 		"shield_progress": "next layer {done} of {cost} power",
 		"shield_full": "shield full",
-		"sheltering": "Crew in the shelter",
-		"in_base": "Crew in the main base",
 		"greenhouse_on": "Greenhouse ON: growing {food} food this turn",
 		"greenhouse_off": "Greenhouse OFF",
 		"greenhouse_none": "The greenhouse opens on Level 2",
@@ -96,8 +153,8 @@ const TEXT := {
 		"food_left": "Food for {turns} more turns",
 	},
 	"hud": {
-		"line": "LEVEL {level}  {name}    TURN {turn} / {total}    {phase}    STARS {stars}",
-		"line_dates": "LEVEL {level}  {name}    TURN {turn} / {total}    {phase}    {dates}    STARS {stars}",
+		"line": "LEVEL {level}  {name}    TURN {turn} / {total}    {phase}    STARS {earned} / {possible}",
+		"line_dates": "LEVEL {level}  {name}    TURN {turn} / {total}    {phase}    {dates}    STARS {earned} / {possible}",
 		"radiation": "RADIATION {dose}/{limit}",
 	},
 	"meters": {
@@ -107,7 +164,7 @@ const TEXT := {
 		"food": "Food",
 		"radiation": "Radiation",
 		"shield": "Shield",
-		"stars": "Stars",
+		"science": "Science",
 		"recycler_on": "Recycler on",
 		"recycler_off": "Recycler OFF",
 		"day": "DAY",
@@ -134,10 +191,16 @@ const TEXT := {
 		"on": "ON",
 		"off": "OFF",
 		"title": "Quit to title",
+		# the three groups of controls
+		"groups": {
+			"running": "KEEP THE BASE RUNNING",
+			"protection": "PROTECT THE CREW",
+			"science": "DO SCIENCE",
+		},
 		"hints": {
 			"life_support": "3 keeps Air steady. Less: Air drops.",
 			"shield": "8 power builds 1 layer. It lasts forever.",
-			"science": "1 power = 1 star.",
+			"science": "1 power = 1 science.",
 			"charge": "1 power puts 0.8 in the battery.",
 			"greenhouse": "Grows 3 food. Uses 1 water.",
 			"no_science_shelter": "No science in the shelter.",
@@ -145,20 +208,19 @@ const TEXT := {
 	},
 	"alert": {
 		"heading": "STORM ALERT",
-		"title": "Mission Control spotted an {full_class} flare!",
-		"chance": "About {dots} in 10 flares like this sent a radiation storm.",
-		"shelter": "Shelter ({cost} power, no science)",
-		"stay": "Stay in the main base",
+		"title": "{full_class} flare spotted!",
+		"chance": "About {dots} in 10 like this sent a storm.",
+		# what is at stake (numbers only, never the outcome)
+		"stakes": "If a storm comes:",
+		"shelter": "Shelter:  Radiation +{dose}",
+		"stay": "Stay:  Radiation +{dose}",
 		"chosen": "> {text} <",
 		"choose": "Storm alert! Choose: shelter or stay.",
-		"when": "Flare seen on {date}",
-		# what is at stake, and what sheltering gives up (numbers only, never the outcome)
-		"stakes": "If a storm comes: Radiation +{stay} in the main base, +{shelter} in the shelter.",
-		"gives_up_one": "Sheltering would stop science this turn: you give up 1 star.",
-		"gives_up_many": "Sheltering would stop science this turn: you give up {stars} stars.",
-		"gave_up_one": "In the shelter. Science is paused: 1 star given up this turn.",
-		"gave_up_many": "In the shelter. Science is paused: {stars} stars given up this turn.",
-		"gives_up_none": "Sheltering costs {cost} power. No science is planned this turn.",
+		"when": "Seen on {date}",
+		# what sheltering costs, in one short line
+		"cost": "Shelter costs {cost} power. No science there.",
+		"cost_science": "Shelter costs {cost} power and {science} science.",
+		"cost_paid": "In the shelter. No science this turn.",
 	},
 	# What happened on the turn just played (shown only after the turn).
 	"report": {
@@ -191,8 +253,8 @@ const TEXT := {
 		"lost_dose": "Radiation never goes away. Build shielding, or shelter when a big flare is spotted.",
 		"lost_food": "Grow food while the sun shines: the greenhouse costs 1 power by day but 4 at night.",
 		"lost_water": "Keep life support at 3 or more so the water recycler keeps running.",
-		"high_dose": "You made it, but your radiation is high. The next levels have more storms.",
-		"default": "Great work. Could you earn more stars without losing safety?",
+		"high_dose": "You made it, but your radiation is high. The shelter or a shield keeps it lower.",
+		"default": "Great work. Could you earn more science without losing safety?",
 	},
 	"debrief": {
 		"won": "Level complete!",
@@ -203,10 +265,10 @@ const TEXT := {
 			"dose": "The crew took in too much radiation.",
 			"food": "The food ran out.",
 			"water": "The water ran out.",
-			"won": "You kept the base running for all 14 turns.",
+			"won": "You kept the base running for all {turns} turns.",
 		},
 		"tip_heading": "TIP",
-		"score": "Stars {stars}    Radiation {dose} of {limit}    Shield {shield} of {max}",
+		"score": "Science {science}    Radiation {dose} of {limit}    Shield {shield} of {max}",
 		"storms_heading": "The real flares on this level",
 		"no_storms_played": "No alerts came before the level ended.",
 		"storm_turn": "Turn {turn} · {full_class}",
@@ -222,7 +284,7 @@ const TEXT := {
 		"storm_link_short": "{full_class} flare, {date}",
 		"recycler_saved": "Your recycler saved {n} water this level.",
 		"battery_chart": "Your battery, turn by turn",
-		"battery_chart_note": "Turns 1 to 7 are day. Turns 8 to 14 are night.",
+		"battery_chart_note": "Turns 1 to {day_end} are day. Turns {night_start} to {last} are night.",
 		"moon_chart": "Radiation measured at the Moon",
 		# The numbers are per-turn means from NASA OSDR RadLab (LRO/CRaTER), checked against the API on 2026-11-14.
 		"moon_chart_note": "Real measurements from the CRaTER instrument on NASA's Lunar Reconnaissance Orbiter. Each bar shows how many times stronger the radiation was than on a quiet day. The game's storms follow DONKI's records, so the bars and the storm marks do not always match. Saved on {date}.",
@@ -274,7 +336,7 @@ const TEXT := {
 			},
 			{
 				# TODO(verify): lunar day and night are each about 14 Earth days.
-				"game": "One turn is 2 days. A level has 7 day turns and 7 night turns.",
+				"game": "One turn is 2 days. A full-game level has 7 day turns and 7 night turns.",
 				"real": "A real day on the Moon lasts about 14 Earth days. So does a real night.",
 				"verified": false,
 			},
@@ -320,6 +382,12 @@ const TEXT := {
 				"real": "The International Space Station recycles about 98% of its water.",
 				"verified": false,
 			},
+		],
+		"notes_heading": "Made up for the game",
+		# These say what is NOT real, so they need no source.
+		"notes": [
+			"The missions and the stars are made up for the game.",
+			"The short game plays 16 of the 28 real days of each storm level, without a break: 21 January to 5 February 2024, and 9 to 24 May 2024.",
 		],
 		"datasets_heading": "The NASA data in this game",
 		"datasets": [
