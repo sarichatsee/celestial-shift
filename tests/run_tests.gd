@@ -10,6 +10,7 @@ const GameState = preload("res://game_state.gd")
 const Numbers = preload("res://game_numbers.gd")
 const GameText = preload("res://game_text.gd")
 const StormsData = preload("res://storms_data.gd")
+const Facts = preload("res://facts.gd")
 
 var _passed := 0
 var _failed: Array[String] = []
@@ -1393,6 +1394,80 @@ func test_words_are_complete_and_honest() -> void:
 	var g := new_game()
 	eq(g.check_plan(plan({"life_support": 5, "science": 9})), t["messages"]["not_enough_power"])
 	eq(g.get_level_info()["name"], "First Night")
+	done()
+
+
+func test_every_fact_has_an_id_and_the_play_lists_point_at_real_facts() -> void:
+	var science: Dictionary = GameText.TEXT["science"]
+	var ids := {}
+	for row in science["rows"]:
+		var id := str(row.get("id", ""))
+		check(id != "" and not ids.has(id), "a fact needs its own id: " + id)
+		ids[id] = true
+		if row.has("source"):
+			check(str(row["source"]).begins_with("https://") and str(row.get("source_name", "")) != "", id + ": source")
+	for group in ["events", "buildings"]:
+		var lists: Dictionary = science["in_play"][group]
+		for key in lists:
+			for id in lists[key]:
+				check(ids.has(str(id)), "%s.%s points at a missing fact: %s" % [group, key, id])
+				check(str(Facts.row(str(id)).get("note", "")) != "", "%s is used in play but has no note" % id)
+	# every building of the base has a list, even if nothing in it is usable yet
+	for key in ["solar", "battery", "science", "base", "shelter", "greenhouse", "water"]:
+		check(science["in_play"]["buildings"].has(key), key)
+	done()
+
+
+func test_only_checked_facts_are_shown_in_play() -> void:
+	for row in GameText.TEXT["science"]["rows"]:
+		var id := str(row["id"])
+		var may_show: bool = bool(row["verified"]) and str(row.get("note", "")) != ""
+		eq(Facts.usable(id), may_show, id)
+		eq(Facts.note(id), str(row["note"]) if may_show else "", id)
+	check(not Facts.usable("no_such_fact") and Facts.note("no_such_fact") == "", "an unknown fact is never shown")
+	# an unchecked fact is skipped: the next one in the list is told instead
+	var lists: Dictionary = GameText.TEXT["science"]["in_play"]
+	for group in ["events", "buildings"]:
+		for key in lists[group]:
+			var picked := Facts.pick([key], {}) if group == "events" else Facts.for_building(str(key))
+			if picked != "":
+				check(bool(Facts.row(picked)["verified"]), "%s.%s showed an unchecked fact" % [group, key])
+				check(lists[group][key].has(picked), "%s.%s" % [group, key])
+	done()
+
+
+func test_each_fact_is_told_once_and_the_first_event_comes_first() -> void:
+	var seen := {}
+	var first := Facts.pick(["night"], seen)
+	eq(first, "lunar_night")
+	seen[first] = true
+	eq(Facts.pick(["night"], seen), "", "told once")
+	# the first event in the list wins; when it has nothing new, the next one speaks
+	eq(Facts.pick(["greenhouse", "charge"], seen), "crops")
+	seen["crops"] = true
+	eq(Facts.pick(["greenhouse", "charge"], seen), "battery_loss")
+	eq(Facts.pick([], {}), "")
+	eq(Facts.pick(["no_such_event"], {}), "")
+	# a list is told in order, one fact each time
+	var told: Array = []
+	var seen_alerts := {}
+	for i in 6:
+		var id := Facts.pick(["false_alarm"], seen_alerts)
+		if id != "":
+			told.append(id)
+			seen_alerts[id] = true
+	var expected: Array = []
+	for id in GameText.TEXT["science"]["in_play"]["events"]["false_alarm"]:
+		if Facts.usable(str(id)):
+			expected.append(str(id))
+	eq(told, expected)
+	done()
+
+
+func test_every_level_has_a_question() -> void:
+	for group in ["levels", "levels_short"]:
+		for level in GameText.TEXT[group]:
+			check(str(level.get("question", "")).ends_with("?"), "%s: %s" % [group, level["name"]])
 	done()
 
 

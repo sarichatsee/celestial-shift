@@ -7,7 +7,8 @@ extends RefCounted
 ##
 ## FACTS: a science sentence marked TODO(verify) has NOT been checked by a human
 ## yet. Do not remove a mark, or set "verified": true, without checking the
-## source (HANDOVER.md section 12).
+## source (HANDOVER.md section 12). Unchecked facts stay on the Science page
+## with a "still checking" mark and are never shown in play.
 ##
 ## Plain characters only: the default Godot font has no emoji.
 
@@ -32,19 +33,23 @@ const TEXT := {
 		{
 			"name": "First Night",
 			"intro": "Welcome to the Moon base! The sun gives 10 power each turn, but only for 7 turns. Then comes night: 7 turns on battery power alone. Air needs power every turn.",
+			"question": "How much battery did the night need? Did you save too much, or too little?",
 		},
 		{
 			"name": "Green Thumb",
 			"intro": "A supply lander brought 16 days of food, and the crew eats 2 each turn. Grow more in the greenhouse. It is cheap in sunlight and costly at night.",
+			"question": "When was the best time to run the greenhouse? Why?",
 		},
 		{
 			"name": "Space Weather",
 			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. Sheltering costs power and science. Radiation never goes away.",
+			"question": "Would you shelter again on a 1 in 10 alert? What would you give up?",
 		},
 		{
-			# TODO(verify): how the May 2024 storm is described. This wording only says what the saved DONKI alerts show.
+			# Checked by the team, 2026-11-15. The wording only says what the saved DONKI alerts show.
 			"name": "The Big One",
 			"intro": "May 2024: big flares came almost every turn. Is it better to build a shield, or to shelter each time? Power is short. Choose with care.",
+			"question": "Which kept the crew safer: the shield, or the shelter? Why?",
 		},
 	],
 	# The short game: the same base and the same real flares, in fewer turns.
@@ -52,15 +57,18 @@ const TEXT := {
 		{
 			"name": "First Night",
 			"intro": "Welcome to the Moon base! The sun gives 10 power each turn, but only for 4 turns. Then comes night: 4 turns on battery power alone. Air needs power every turn.",
+			"question": "How much battery did the night need? Did you save too much, or too little?",
 		},
 		{
 			"name": "Space Weather",
 			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. Shelter to stay safe, or stay and do science. Radiation never goes away.",
+			"question": "Would you shelter again on a 1 in 10 alert? What would you give up?",
 		},
 		{
-			# TODO(verify): how the May 2024 storm is described. This wording only says what the saved DONKI alerts show.
+			# Checked by the team, 2026-11-15. The wording only says what the saved DONKI alerts show.
 			"name": "The Big One",
 			"intro": "May 2024: big flares came turn after turn. Build a shield, or shelter each time? Choose with care.",
+			"question": "Which kept the crew safer: the shield, or the shelter? Why?",
 		},
 	],
 	# The three stars of a level, and the missions. Both are made up for the game.
@@ -291,6 +299,21 @@ const TEXT := {
 		"moon_times": "{n}×",
 		"moon_storm": "storm",
 		"reflection": "What would you do differently next time?",
+		"question_heading": "TALK ABOUT IT",
+		# "What really happened": the player's own choices next to the real record.
+		# Counts only, from the turns that were played.
+		"recap_heading": "What really happened",
+		"recap_alerts_one": "Mission Control sent 1 alert.",
+		"recap_alerts_many": "Mission Control sent {n} alerts.",
+		"recap_storms_none": "No radiation storm followed.",
+		"recap_storms_one": "A radiation storm followed 1 time.",
+		"recap_storms_many": "A radiation storm followed {n} times.",
+		"recap_sheltered_none": "You never sheltered.",
+		"recap_sheltered_one": "You sheltered 1 time.",
+		"recap_sheltered_many": "You sheltered {n} times.",
+		"recap_extra": "Sheltering when no storm comes is not a mistake. The dots only show a chance.",
+		"recap_hits": "Staying kept the science going, but it added {dose} Radiation.",
+		"recap_match": "Every choice matched what happened. With only a chance to go on, that took some luck!",
 		"next": "Next level",
 		"retry": "Try this level again",
 		"again": "Play again from Level 1",
@@ -316,73 +339,179 @@ const TEXT := {
 		"game_column": "IN THE GAME",
 		"real_column": "IN REAL LIFE",
 		"unverified": "(We are still checking this fact.)",
+		# One list of facts for the whole game. Each row has:
+		#   id        a short name; `in_play` below points at it
+		#   game      what the game does
+		#   real      what is true in real life (the Science page shows both)
+		#   note      one short sentence for play: Mission Control notes and building cards.
+		#             It may only say what `real` says. A row without one stays on the Science page.
+		#   verified  true once a human has checked the fact. Unchecked facts are never shown in play.
+		#   source    where the fact comes from, when it is a web page (shown as a link)
 		"rows": [
 			{
+				"id": "real_flares",
 				"game": "Every storm alert is a real solar flare.",
 				"real": "The flares, their dates and whether a particle storm followed come from NASA's DONKI database for 2024.",
+				"note": "Every alert in this game is a real flare from 2024, saved from NASA's DONKI database.",
 				"verified": true,  # checked against the DONKI API on 2026-11-14 (HANDOVER.md section 12)
 			},
 			{
+				"id": "odds",
 				"game": "The storm chance is shown as dots out of 10.",
 				"real": "In 2024, 14 of 54 X-class alerts and 9 of 82 strong M-class alerts were followed by a particle storm. The game uses only the flare class. Real forecasters use much more, and still get false alarms.",
+				"note": "Real forecasters get false alarms too. In 2024, most strong flares were not followed by a particle storm.",
 				"verified": true,  # the counts were checked against the DONKI API on 2026-11-14
 			},
 			{
 				# How tools/build_storms.py works: "followed" means DONKI links a
 				# particle storm (SEP) record to the flare. The rest is a caution, not a claim.
+				"id": "record",
 				"game": "After an alert, the game tells you a radiation storm came, or that none was recorded.",
 				"real": "The game follows the links in DONKI between flares and particle storms. No link means no storm was recorded for that flare. It is not proof that nothing happened.",
 				"verified": true,
 			},
 			{
-				# TODO(verify): lunar day and night are each about 14 Earth days.
+				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Source says: "Our planet has two layers of protection that the Moon lacks - an
+				# atmosphere and a global magnetic field" and "With no magnetosphere, and almost no
+				# atmosphere, most of the lunar surface is directly exposed to solar wind and other
+				# space radiation."
+				"id": "why_moon",
+				"game": "A radiation storm is a danger at the Moon base.",
+				"real": "Earth has two shields that the Moon lacks: its air and a magnetic field all around the planet. On the Moon, most of the ground is open to radiation from space.",
+				"note": "Earth has two shields that the Moon lacks: its air and its magnetic field.",
+				"verified": false,
+				"source_name": "NASA Science: Solar Wind on the Moon",
+				"source": "https://science.nasa.gov/moon/solar-wind/",
+			},
+			{
+				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Source says: "each higher class is a 10-fold increase in energy. So an X flare is
+				# 10 times stronger than an M flare" and classes A to M "are divided further using
+				# numbers 1 through 9".
+				"id": "flare_classes",
+				"game": "An alert shows the flare's class, such as M5.1 or X3.9.",
+				"real": "Flares are sorted into classes A, B, C, M and X, from weakest to strongest. Each class is 10 times stronger than the one before, so an X flare is 10 times stronger than an M flare. The number after the letter sorts flares inside a class.",
+				"note": "Flares go A, B, C, M, X. Each letter is 10 times stronger than the one before.",
+				"verified": false,
+				"source_name": "NASA Science: Solar Storms and Flares",
+				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
+			},
+			{
+				# TODO(verify): researched by the coding agent on 2026-11-15, not yet checked by a human.
+				# Source says: a solar flare is "an intense burst of radiation, or light", its
+				# energy "reaches Earth about 8 minutes after a flare happens", and in a radiation
+				# storm "the fastest particles ... zip across roughly 93 million miles from the Sun
+				# to Earth in about 30 minutes or less".
+				"id": "flare_vs_storm",
+				"game": "The alert comes first. A radiation storm may follow, or not.",
+				"real": "A flare is a burst of light. Its light reaches Earth about 8 minutes after the flare happens. A radiation storm is made of fast particles, and the fastest can cross from the Sun to Earth in about 30 minutes or less.",
+				"note": "A flare is a burst of light. A radiation storm is fast particles, which come later.",
+				"verified": false,
+				"source_name": "NASA Science: Solar Storms and Flares",
+				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
+			},
+			{
+				# checked by the team, 2026-11-15
+				"id": "lunar_night",
 				"game": "One turn is 2 days. A full-game level has 7 day turns and 7 night turns.",
 				"real": "A real day on the Moon lasts about 14 Earth days. So does a real night.",
-				"verified": false,
+				"note": "A real night on the Moon lasts about 14 Earth days. So does a real day.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): wording about real battery losses.
+				# checked by the team, 2026-11-15
+				"id": "battery_loss",
 				"game": "Charging loses 20% of the power.",
 				"real": "Real batteries lose some energy too. The 20% is a game number.",
-				"verified": false,
+				"note": "Real batteries lose some energy too. The 20% is a game number.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): against NASA-STD-3001 radiation limits.
+				# checked by the team, 2026-11-15
+				"id": "dose_bar",
 				"game": "The Radiation bar goes from 0 to 100.",
 				"real": "This is a simple stand-in. Real radiation dose is measured in millisieverts, and space agencies set career limits for astronauts.",
-				"verified": false,
+				"note": "Real radiation dose is measured in millisieverts. Space agencies set career limits for astronauts.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): what real storm shelters are made of.
+				# checked by the team, 2026-11-15
+				"id": "shelter",
 				"game": "The shelter and the shield cut storm radiation.",
 				"real": "Real shelters use thick walls of water, supplies or Moon dirt.",
-				"verified": false,
+				"note": "Real shelters use thick walls of water, supplies or Moon dirt.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): storm particles reach the Moon's night side.
+				# checked by the team, 2026-11-15
+				"id": "night_storms",
 				"game": "Storms can hit at night.",
 				"real": "Storm particles can reach the Moon's night side too.",
-				"verified": false,
+				"note": "Storm particles can reach the Moon's night side too.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): cosmic rays as a steady background dose.
+				# checked by the team, 2026-11-15
+				"id": "cosmic_rays",
 				"game": "Radiation only comes from storms.",
 				"real": "There are also cosmic rays, all the time. The game leaves them out.",
-				"verified": false,
+				"note": "In real life there are also cosmic rays, all the time. The game leaves them out.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): crop growth times (NASA Veggie).
+				# checked by the team, 2026-11-15
+				"id": "crops",
 				"game": "The greenhouse grows food in one turn.",
 				"real": "Real crops take weeks to grow.",
-				"verified": false,
+				"note": "Real crops take weeks to grow. The game speeds them up.",
+				"verified": true,
 			},
 			{
-				# TODO(verify): ISS water recovery is about 98% (NASA, 2023).
+				# checked by the team, 2026-11-15
+				"id": "recycler",
 				"game": "The recycler halves the water you lose.",
 				"real": "The International Space Station recycles about 98% of its water.",
-				"verified": false,
+				"note": "The International Space Station recycles about 98% of its water.",
+				"verified": true,
+			},
+			{
+				# The same statement as the RadLab entry under `datasets`, checked against the API on 2026-11-14.
+				"id": "crater",
+				"game": "After a storm level, a chart shows the radiation at the Moon.",
+				"real": "The numbers were measured by the CRaTER instrument on NASA's Lunar Reconnaissance Orbiter.",
+				"note": "The CRaTER instrument on NASA's Lunar Reconnaissance Orbiter measures radiation at the Moon.",
+				"verified": true,
 			},
 		],
+		# Where the facts show up in play. Every id is a row above; a row that is not
+		# verified, or has no `note`, is skipped.
+		"in_play": {
+			# What just happened -> the facts to tell, one each time it happens, in this order.
+			"events": {
+				"storm_night": ["night_storms"],
+				"storm": ["why_moon", "shelter", "dose_bar"],
+				"false_alarm": ["odds", "cosmic_rays"],
+				"alert": ["flare_classes", "flare_vs_storm", "real_flares"],
+				"night": ["lunar_night"],
+				"shield": ["shelter"],
+				"recycler_off": ["recycler"],
+				"greenhouse": ["crops"],
+				"charge": ["battery_loss"],
+			},
+			# Building -> the facts for its card (the first usable one is shown).
+			"buildings": {
+				"solar": ["lunar_night"],
+				"battery": ["battery_loss"],
+				"science": ["crater"],
+				"base": ["why_moon", "dose_bar"],
+				"shelter": ["shelter"],
+				"greenhouse": ["crops"],
+				"water": ["recycler"],
+			},
+		},
+		"in_real_life": "IN REAL LIFE",
+		"source_link": "Source: {name}",
 		"notes_heading": "Made up for the game",
 		# These say what is NOT real, so they need no source.
 		"notes": [

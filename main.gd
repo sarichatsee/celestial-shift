@@ -21,6 +21,7 @@ const SoundFx = preload("res://sound_fx.gd")
 const LiveSun = preload("res://live_sun.gd")
 const MoonBaseView = preload("res://moon_base_view.gd")
 const StarRow = preload("res://star_row.gd")
+const Facts = preload("res://facts.gd")
 
 # Display-only settings (they never change a rule).
 const AIR_LOW_PCT := 30.0  # the Air meter warns under this
@@ -65,6 +66,8 @@ var science_before_shelter := 0
 var hint := ""  # a one-off friendly message (night falls, new meters)
 var last_control := ""  # the control touched last: its hint shows in the notice line
 var report: Dictionary = {}  # what happened on the turn just played
+var note := ""  # the real-life fact told this turn (a fact id), or ""
+var facts_seen := {}  # the facts already told in this game: each is told once
 var new_meters_seen := false
 var live_info: Dictionary = {}  # "The Sun right now" (empty while loading)
 
@@ -84,6 +87,9 @@ var alert_when: Label
 var alert_stakes: Label
 var alert_cost: Label
 var goals_panel: PanelContainer
+var note_panel: PanelContainer
+var note_label: Label
+var alert_note: Label
 var _goal_rows := {}  # "safe" / "science" / "missions" -> {star, words}
 var shelter_button: Button
 var stay_button: Button
@@ -147,6 +153,7 @@ func _ready() -> void:
 	_build_hotspots()
 	_build_meters()
 	_build_alert()
+	_build_note()
 	_build_goals()
 	_build_report()
 	_build_part_card()
@@ -350,6 +357,28 @@ func _build_alert() -> void:
 	box.add_child(choices)
 	alert_cost = Kit.label("", 15, Kit.C_MUTED)
 	box.add_child(alert_cost)
+	# a real-life fact, when there is one to tell on an alert turn
+	alert_note = Kit.label("", 15, Kit.C_WATER, true)
+	alert_note.custom_minimum_size.x = 526.0
+	alert_note.visible = false
+	box.add_child(alert_note)
+
+
+## A real-life fact about what just happened, in the same place as the alert
+## box. (On an alert turn the fact is a line inside the alert box instead.)
+func _build_note() -> void:
+	note_panel = PanelContainer.new()
+	note_panel.add_theme_stylebox_override("panel", Kit.flat(Color(0.04, 0.09, 0.14, 0.95), 8, Kit.C_WATER, 2, 12))
+	note_panel.position = Vector2(390, 88)
+	note_panel.custom_minimum_size = Vector2(556, 0)
+	note_panel.visible = false
+	add_child(note_panel)
+	var box := Kit.vbox(2)
+	note_panel.add_child(box)
+	box.add_child(Kit.label(_t("science.in_real_life"), 13, Kit.C_WATER))
+	note_label = Kit.label("", 18, Kit.C_TEXT, true)
+	note_label.custom_minimum_size.x = 526.0
+	box.add_child(note_label)
 
 
 ## The three stars of this level, top right: what each one asks, and how far along it is.
@@ -502,6 +531,7 @@ func _set_game_visible(showing: bool) -> void:
 	meters_panel.visible = showing
 	goals_panel.visible = showing
 	if not showing:
+		note_panel.visible = false
 		_close_part()
 		for key in _hotspots:
 			(_hotspots[key] as Button).visible = false
@@ -552,6 +582,7 @@ func _start_mission(mode: String) -> void:
 	game.mission_seed = randi()
 	game.set_mode(mode)
 	new_meters_seen = false
+	facts_seen = {}
 	_show_intro()
 
 
@@ -646,6 +677,8 @@ func _show_science() -> void:
 		real_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		real_side.add_child(Kit.label(_t("science.real_column"), 13, Kit.C_STATUS))
 		real_side.add_child(Kit.label(str(row["real"]), 17, Kit.C_TEXT, true))
+		if row.has("source"):
+			real_side.add_child(Kit.link(_t("science.source_link", {"name": row["source_name"]}), str(row["source"])))
 		if not bool(row["verified"]):
 			real_side.add_child(Kit.label(_t("science.unverified"), 14, Kit.C_WARN, true))
 		columns.add_child(game_side)
@@ -871,6 +904,19 @@ func _open_part(key: String) -> void:
 				recycler.text = _t("meters.recycler_on") if on else _t("meters.recycler_off")
 				recycler.add_theme_color_override("font_color", Kit.C_GOOD if on else Kit.C_WARN))
 
+	# what this building is like in real life (a checked fact, or nothing)
+	var fact_id := Facts.for_building(key)
+	if fact_id != "":
+		var real_head := Kit.label(_t("science.in_real_life"), 13, Kit.C_WATER)
+		part_card_box.add_child(real_head)
+		var real_words := _card_words(Facts.note(fact_id), 16)
+		if key == "shelter":
+			# on an alert turn the card is full: the alert comes first
+			_card_updates.append(func() -> void:
+				var quiet_turn := game.alert_for_turn().is_empty()
+				real_head.visible = quiet_turn
+				real_words.visible = quiet_turn)
+
 	part_card.custom_minimum_size = Vector2(wide, 0)
 	part_card.modulate.a = 0.0  # shown once it has been measured and placed
 	part_card.visible = true
@@ -898,10 +944,11 @@ func _place_part_card(key: String) -> void:
 
 
 ## A line of words in the open card.
-func _card_words(words: String, font_size: int = 17, color: Color = Kit.C_TEXT) -> void:
+func _card_words(words: String, font_size: int = 17, color: Color = Kit.C_TEXT) -> Label:
 	var line := Kit.label(words, font_size, color, true)
 	line.custom_minimum_size.x = _card_wide - 30.0
 	part_card_box.add_child(line)
+	return line
 
 
 ## A copy of one meter from the meters panel, kept in step with it.
@@ -1235,6 +1282,15 @@ func _refresh() -> void:
 		report_label.text = _t("report.heading") + ":  " + str(report["text"])
 		report_panel.add_theme_stylebox_override("panel", Kit.flat(Kit.C_PANEL, 8, edge, 2, 10))
 
+	# a real-life fact about what just happened: its own box, or a line of the alert box
+	var note_words := Facts.note(note) if note != "" else ""
+	note_panel.visible = note_words != "" and alert.is_empty()
+	note_label.text = note_words
+	alert_note.visible = note_words != "" and not alert.is_empty()
+	alert_note.text = _t("science.in_real_life") + ":  " + note_words
+	if note_panel.visible:
+		note_panel.reset_size.call_deferred()
+
 	# the storm alert
 	alert_panel.visible = not alert.is_empty()
 	if not alert.is_empty():
@@ -1383,6 +1439,7 @@ func _begin_level() -> void:
 	science_before_shelter = 0
 	in_greenhouse = false
 	_close_part()
+	_tell([] if game.alert_for_turn().is_empty() else ["alert"])
 	if game.has_food() and not new_meters_seen:
 		hint = _t("messages.new_meters")
 		new_meters_seen = true
@@ -1399,6 +1456,8 @@ func _end_turn() -> void:
 	var played_turn := game.turn
 	var low_before := _low_meters()
 	var shield_before := game.shield
+	var played: Dictionary = plan.duplicate()
+	var had_recycler: bool = game.has_food()
 	var result := game.take_turn(plan.duplicate())
 	var status := str(result["status"])
 	if status == "invalid":
@@ -1426,6 +1485,27 @@ func _end_turn() -> void:
 	if alert_now:
 		in_greenhouse = false  # look at the Sun
 		_close_part()  # the alert box needs the space
+	# One real-life fact about what just happened, the most important first.
+	var events: Array = []
+	if not report.is_empty() and bool(report["hit"]):
+		if played_turn > _n("DAY_TURNS"):
+			events.append("storm_night")
+		events.append("storm")
+	elif not report.is_empty() and bool(report["alert"]):
+		events.append("false_alarm")
+	if alert_now:
+		events.append("alert")
+	if game.turn == _n("DAY_TURNS") + 1:
+		events.append("night")
+	if game.shield > shield_before:
+		events.append("shield")
+	if had_recycler and int(played["life_support"]) < _n("LS_NEEDED"):
+		events.append("recycler_off")
+	if bool(played["greenhouse"]):
+		events.append("greenhouse")
+	if int(played["charge"]) > 0:
+		events.append("charge")
+	_tell(events)
 	if not report.is_empty() and bool(report["hit"]):
 		cue = "shelter" if bool(report["sheltered"]) else "storm_hit"
 	elif alert_now:
@@ -1440,6 +1520,14 @@ func _end_turn() -> void:
 		cue = "shield"
 	sound.play(cue)
 	_refresh()
+
+
+## Choose the real-life fact for this turn from what just happened (see
+## facts.gd). Each fact is told once in a game; most turns have none.
+func _tell(events: Array) -> void:
+	note = Facts.pick(events, facts_seen)
+	if note != "":
+		facts_seen[note] = true
 
 
 ## What happened on the turn that was just played: the mission, and what the
@@ -1548,6 +1636,13 @@ func _show_debrief(result: Dictionary) -> void:
 	tip_card.add_child(Kit.label(_t("debrief.tip_heading") + ":  " + str(d["tip"]), 19, Kit.C_TEXT, true))
 	overlay_content.add_child(tip_card)
 
+	# one question about this level, to talk over
+	var question_card := Kit.striped_card(Kit.C_WATER)
+	question_card.add_child(Kit.label(
+		_t("debrief.question_heading") + ":  " + str(game.level_text().get("question", _t("debrief.reflection"))),
+		19, Kit.C_TEXT, true))
+	overlay_content.add_child(question_card)
+
 	var buttons := Kit.hbox(12)
 	var first_button: Button = null
 	if status == "level_won":
@@ -1584,6 +1679,8 @@ func _show_debrief(result: Dictionary) -> void:
 		var cards: Array = d["storms"]
 		if cards.is_empty():
 			overlay_content.add_child(Kit.label(_t("debrief.no_storms_played"), 17, Kit.C_MUTED))
+		else:
+			overlay_content.add_child(_recap_card(cards))
 		var grid := GridContainer.new()
 		grid.columns = 2
 		grid.add_theme_constant_override("h_separation", 12)
@@ -1608,7 +1705,6 @@ func _show_debrief(result: Dictionary) -> void:
 
 	if d["recycler_saved"] != null:
 		overlay_content.add_child(Kit.label(_t("debrief.recycler_saved", {"n": d["recycler_saved"]}), 20, Kit.C_WATER, true))
-	overlay_content.add_child(Kit.label(_t("debrief.reflection"), 22, Kit.C_SUN, true))
 	_focus(first_button)
 
 
@@ -1621,6 +1717,52 @@ func _on_next_level() -> void:
 func _on_retry_level() -> void:
 	game.retry_level()
 	_begin_level()
+
+
+## "What really happened": the player's answers to the alerts next to the real
+## record. Counts only, from the turns that were played.
+func _recap_card(cards: Array) -> Control:
+	var storms := 0
+	var sheltered := 0
+	var sheltered_for_nothing := 0
+	var stayed_and_hit := 0
+	var dose_from_staying := 0.0
+	for card in cards:
+		var followed := bool(card["followed"])
+		var in_shelter := bool(card["sheltered"])
+		storms += int(followed)
+		sheltered += int(in_shelter)
+		if in_shelter and not followed:
+			sheltered_for_nothing += 1
+		if followed and not in_shelter:
+			stayed_and_hit += 1
+			dose_from_staying += float(card["dose"])
+	var node := Kit.striped_card(Kit.C_WATER)
+	var box := Kit.vbox(4)
+	node.add_child(box)
+	box.add_child(Kit.label(_t("debrief.recap_heading"), 20, Kit.C_WATER))
+	box.add_child(Kit.label(" ".join(PackedStringArray([
+		_count_words("debrief.recap_alerts", cards.size()), _count_words("debrief.recap_storms", storms),
+		_count_words("debrief.recap_sheltered", sheltered),
+	])), 18, Kit.C_TEXT, true))
+	var closing := PackedStringArray()
+	if stayed_and_hit > 0:
+		closing.append(_t("debrief.recap_hits", {"dose": _num(dose_from_staying)}))
+	if sheltered_for_nothing > 0:
+		closing.append(_t("debrief.recap_extra"))
+	if closing.is_empty():
+		closing.append(_t("debrief.recap_match"))
+	box.add_child(Kit.label(" ".join(closing), 17, Kit.C_MUTED, true))
+	return node
+
+
+## "1 time" or "3 times": the words at `path` + "_none", "_one" or "_many".
+func _count_words(path: String, count: int) -> String:
+	if count == 1:
+		return _t(path + "_one")
+	if count == 0 and path != "debrief.recap_alerts":
+		return _t(path + "_none")
+	return _t(path + "_many", {"n": count})
 
 
 func _storm_card(card: Dictionary) -> Control:

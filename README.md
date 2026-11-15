@@ -67,6 +67,18 @@ short game only overrides the number of turns.
   Radiation: in the shelter, or in the main base. Never the outcome. Shelter
   costs 1 power and the turn's science.
 
+**Real-life facts** appear where they matter, one short sentence each:
+
+- an "In real life" box the first time something happens (night falls, an
+  alert, an alert with no storm, a storm that hits, a shield layer, the
+  greenhouse, charging). Each fact is told once in a game;
+- an "In real life" line on each building's card;
+- on the debrief, "What really happened" (your answers to the alerts next
+  to the real record) and one question to talk about.
+
+All of them come from the Science page's list. A fact that is not marked
+as checked stays on the Science page only, with a "still checking" note.
+
 The controls sit in three boxes: **Keep the base running** (life support,
 charging, greenhouse), **Protect the crew** (shield) and **Do science**.
 
@@ -92,7 +104,8 @@ fill the 1280 × 720 canvas.
 | File | What it is |
 | --- | --- |
 | `game_numbers.gd` | Every game number, each tagged `[TUNE]`. Change one only with the simulator. Also the short game's levels, the star goals and the mission list, which the simulator does not have. |
-| `game_text.gd` | Every word a player reads. Unchecked science facts are marked `TODO(verify)`. |
+| `game_text.gd` | Every word a player reads, and the one list of real-life facts (`science.rows`). Unchecked facts are marked `TODO(verify)`. |
+| `facts.gd` | Chooses which fact to show in play. Only facts a human has checked (`"verified": true`) are shown. |
 | `storms_data.gd` | Saved NASA data. **Generated** by `tools/build_storms.py`; never edit by hand. |
 | `game_state.gd` | The rules, for both games, with the missions and the stars. No nodes, no randomness. The only reader of whether a storm followed. |
 | `main.gd`, `main.tscn` | The screen: draws the state, reads clicks, calls the rules. |
