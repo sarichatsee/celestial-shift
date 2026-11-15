@@ -42,7 +42,7 @@ const TEXT := {
 		},
 		{
 			"name": "Space Weather",
-			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. Sheltering costs power and science. Radiation never goes away.",
+			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. An X storm hits harder than an M storm. Sheltering costs power and science. Radiation never goes away.",
 			"question": "Would you shelter again on a 1 in 10 alert? What would you give up?",
 		},
 		{
@@ -61,7 +61,7 @@ const TEXT := {
 		},
 		{
 			"name": "Space Weather",
-			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. Shelter to stay safe, or stay and do science. Radiation never goes away.",
+			"intro": "Mission Control is watching the Sun. Every alert on this level is a real flare. An X storm hits harder than an M storm. Shelter, or stay and do science?",
 			"question": "Would you shelter again on a 1 in 10 alert? What would you give up?",
 		},
 		{
@@ -410,6 +410,17 @@ const TEXT := {
 				"verified": true,
 				"source_name": "NASA Science: Solar Storms and Flares",
 				"source": "https://science.nasa.gov/sun/solar-storms-and-flares/",
+			},
+			{
+				# TODO(verify): written by the coding agent on 2026-11-15, not yet checked by a human.
+				# The second sentence is from this game's saved data (storms_data.gd, the
+				# Space Weather window): the per-turn means of CRaTER's dose rate are 365.25
+				# for turn 9 (M6.8, a storm followed) and 363.36 for turn 14 (X3.3, a storm
+				# followed). A test checks the two numbers are still that close.
+				"id": "storm_strength",
+				"game": "An X-class storm adds more Radiation than an M-class storm: 25 against 10 with no shield.",
+				"real": "A bigger flare does not always mean a bigger radiation storm. In this game's saved Moon measurements, the two days with the M6.8 storm were as strong as the two days with the X3.3 storm.",
+				"verified": false,
 			},
 			{
 				# checked by the team, 2026-11-15

@@ -23,7 +23,9 @@ const DEFAULTS := {
 	"SHELTER_COST": 1,  # [TUNE] power to shelter for one turn
 	"DOSE_LIMIT": 100,  # [TUNE] radiation that ends the mission
 	"SHELTER_DOSE": 1.5,  # [TUNE] radiation from a storm while sheltering
-	"DOSE_BY_SHIELD": [20, 13, 9, 5],  # [TUNE] radiation from a storm in the main base, by shield level 0..3
+	# [TUNE] radiation from a storm in the main base, by shield level 0..3. An X-class
+	# storm hits harder than an M-class one. The letter is the one the alert shows.
+	"DOSE_BY_CLASS": {"M": [10, 7, 5, 3], "X": [25, 16, 11, 6]},
 	"FOOD_START": 16,  # [TUNE] days of food the supply lander brings each level
 	"FOOD_EATEN": 2,  # [TUNE] food the crew eats per turn
 	"FOOD_PER_GREENHOUSE": 3,  # [TUNE] food grown in a greenhouse turn

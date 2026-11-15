@@ -325,16 +325,26 @@ func take_turn(plan: Dictionary) -> Dictionary:
 
 
 ## How much Radiation a storm would add this turn IF one comes, with this plan:
-## {"stay": in the main base, "shelter": in the shelter}. Numbers only. It never
-## looks at the saved record, so it is safe to show before the turn is played.
+## {"stay": in the main base, "shelter": in the shelter}. Numbers only: it uses
+## the flare letter the alert shows and never whether a storm followed, so it is
+## safe to show before the turn is played. Both are 0 on a turn with no alert.
 ## Shield power in the plan counts: the shield is built before a storm arrives.
 func storm_stakes(plan: Dictionary) -> Dictionary:
+	var alert := alert_for_turn()
+	if alert.is_empty():
+		return {"stay": 0.0, "shelter": 0.0}
 	var layers := shield
 	var progress := shield_progress + maxi(0, int(plan.get("shield", 0)))
 	while progress >= int(p["SHIELD_COST"]) and layers < int(p["MAX_SHIELD"]):
 		layers += 1
 		progress -= int(p["SHIELD_COST"])
-	return {"stay": float(p["DOSE_BY_SHIELD"][layers]), "shelter": float(p["SHELTER_DOSE"])}
+	return {"stay": float(_dose_by_shield(str(alert["cls"]))[layers]), "shelter": float(p["SHELTER_DOSE"])}
+
+
+## Radiation from a storm in the main base, by shield level, for a flare letter
+## ("M" or "X"): an X-class storm hits harder.
+func _dose_by_shield(cls: String) -> Array:
+	return p["DOSE_BY_CLASS"][cls]
 
 
 func _add_to_shield(power: int) -> void:
@@ -354,7 +364,7 @@ func _resolve_storm(sheltered: bool) -> void:
 		if sheltered:
 			gained = float(p["SHELTER_DOSE"])
 		else:
-			gained = float(p["DOSE_BY_SHIELD"][shield])
+			gained = float(_dose_by_shield(str(storm["shown"]["cls"]))[shield])
 	dose += gained
 	_storm_log.append({"turn": turn, "sheltered": sheltered, "dose": gained, "record": storm})
 

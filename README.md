@@ -44,7 +44,8 @@ godot --headless --path . --script res://tests/run_tests.gd
 
 The tests include the acceptance test: ten fixed strategies must finish with
 exactly the science ("stars" in the simulator), radiation and shield that
-`tools/balance_sim.py` prints (HANDOVER.md section 9.2). The short game, the
+`python3 tools/balance_sim.py --preset tuned_class --food` prints
+(HANDOVER.md section 9.2). The short game, the
 missions and the three stars are not in the simulator. They are kept apart
 from its numbers: mission rewards go to a separate bonus count, and the
 short game only overrides the number of turns.
@@ -66,6 +67,8 @@ short game only overrides the number of turns.
   dots out of 10, and two buttons that each say what a storm would add to
   Radiation: in the shelter, or in the main base. Never the outcome. Shelter
   costs 1 power and the turn's science.
+- **Storm strength:** an X-class storm adds more Radiation than an M-class
+  one: 25 against 10 with no shield, and 6 against 3 behind a full shield.
 
 **Real-life facts** appear where they matter, one short sentence each:
 

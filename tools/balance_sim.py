@@ -58,6 +58,10 @@ for _p in PRESETS.values():
     _p.update(FOOD_WATER)
 # With food and water (use with --food): food adds work, so Air can drain a little slower.
 PRESETS["tuned_food"] = dict(PRESETS["tuned"], AIR_PER_POWER=8)
+# Storm strength by flare letter (team decision, 2026-11-15; use with --food). An M-class
+# storm adds less radiation than DOSE_BY_SHIELD and an X-class storm adds more. The letter
+# is the one the alert shows: the strongest flare of the turn. The game uses this preset.
+PRESETS["tuned_class"] = dict(PRESETS["tuned_food"], DOSE_BY_CLASS={"M": [10, 7, 5, 3], "X": [25, 16, 11, 6]})
 
 RISK_BY_CLASS = {"C": "low", "M": "medium", "X": "high"}  # shown to the player [D6]
 
@@ -181,7 +185,9 @@ class Game:
             return
         dose = 0.0
         if storm["followed"]:
-            dose = self.p["SHELTER_DOSE"] if sheltered else self.p["DOSE_BY_SHIELD"][self.s["shield"]]
+            # one table for every storm, unless the preset has one for each flare letter
+            by_shield = self.p.get("DOSE_BY_CLASS", {}).get(storm["class"], self.p["DOSE_BY_SHIELD"])
+            dose = self.p["SHELTER_DOSE"] if sheltered else by_shield[self.s["shield"]]
         self.s["dose"] += dose
         self.s["storm_log"].append(dict(storm, sheltered=sheltered, dose=dose))
 

@@ -621,12 +621,47 @@ func test_level_info_and_turn_dates() -> void:
 	done()
 
 
-func test_stay_in_a_real_storm_20_with_no_shield() -> void:
+func test_stay_in_a_real_storm_with_no_shield_10_for_m_and_25_for_x() -> void:
 	var g := at_level(3)
-	until_turn(g, 9)
+	until_turn(g, 9)  # 29 January 2024: an M6.8 flare, and a storm
 	eq(g.dose, 0)
+	eq(g.alert_for_turn()["cls"], "M")
 	g.take_turn(plan({"life_support": 3}))
-	eq(g.dose, 20)
+	eq(g.dose, 10)
+	until_turn(g, 14)  # 9 February 2024: an X3.3 flare, and a storm
+	eq([g.dose, g.alert_for_turn()["cls"]], [10, "X"])
+	g.take_turn(plan({"life_support": 3}))
+	eq(g.dose, 35)
+	done()
+
+
+func test_an_x_storm_hits_harder_than_an_m_storm_at_every_shield_level() -> void:
+	var by_class: Dictionary = Numbers.DEFAULTS["DOSE_BY_CLASS"]
+	eq(by_class.keys(), ["M", "X"])
+	for cls in by_class:
+		var table: Array = by_class[cls]
+		eq(table.size(), int(Numbers.DEFAULTS["MAX_SHIELD"]) + 1, cls)
+		for i in range(1, table.size()):
+			check(table[i] < table[i - 1], "%s: each shield layer cuts the storm" % cls)
+		check(table[table.size() - 1] > Numbers.DEFAULTS["SHELTER_DOSE"], "%s: the shelter still beats a full shield" % cls)
+	for i in by_class["M"].size():
+		check(by_class["X"][i] > by_class["M"][i], "shield %d" % i)
+	# every alert in the saved data is an M or an X
+	for key in StormsData.DATA["windows"]:
+		for window in StormsData.DATA["windows"][key]:
+			for record in window["turns"]:
+				check(by_class.has(str(record["shown"]["cls"])), "a flare letter with no storm strength")
+	done()
+
+
+func test_storm_stakes_follow_the_letter_the_alert_shows() -> void:
+	var g := at_level(3)
+	var quiet := plan({"life_support": 3})
+	eq(g.storm_stakes(quiet), {"stay": 0.0, "shelter": 0.0}, "no alert on turn 1")
+	until_turn(g, 13)  # an M5.1 flare
+	eq(g.storm_stakes(quiet), {"stay": 10.0, "shelter": 1.5})
+	until_turn(g, 14)  # an X3.3 flare
+	eq(g.storm_stakes(quiet), {"stay": 25.0, "shelter": 1.5})
 	done()
 
 
@@ -658,14 +693,15 @@ func test_storm_stakes_match_what_a_storm_really_adds() -> void:
 func test_storm_stakes_count_a_shield_layer_finished_this_turn() -> void:
 	var g := at_level(3)
 	until_turn(g, 9)
-	eq(g.storm_stakes(plan({"life_support": 3}))["stay"], 20.0)
-	eq(g.storm_stakes(plan({"life_support": 3, "shield": 7}))["stay"], 20.0)
+	# turn 9 is an M-class storm: 10 with no shield, 7 behind one layer
+	eq(g.storm_stakes(plan({"life_support": 3}))["stay"], 10.0)
+	eq(g.storm_stakes(plan({"life_support": 3, "shield": 7}))["stay"], 10.0)
 	var pl := plan({"life_support": 3, "shield": 8})
-	eq(g.storm_stakes(pl)["stay"], 13.0)
+	eq(g.storm_stakes(pl)["stay"], 7.0)
 	eq(g.storm_stakes(pl)["shelter"], 1.5)
 	var before := g.dose
 	g.take_turn(pl)
-	eq(g.dose - before, 13.0)
+	eq(g.dose - before, 7.0)
 	done()
 
 
@@ -701,7 +737,7 @@ func test_false_alarm_no_radiation_either_way() -> void:
 
 
 func test_shield_counts_after_this_turns_building() -> void:
-	var expected := [20, 13, 9, 5]
+	var expected := [25, 16, 11, 6]  # Level 4, turn 2 is an X-class storm
 	for layers in range(0, 4):
 		# build the shield in the daylight of Level 1, then carry it to Level 4
 		var g := new_game()
@@ -727,7 +763,7 @@ func test_shield_counts_after_this_turns_building() -> void:
 	g2.take_turn(plan({"life_support": 3}))
 	# built on the storm turn itself
 	eq(g2.take_turn(plan({"life_support": 2, "shield": 8}))["status"], "continue")
-	eq([g2.shield, g2.dose - before2], [1, 13])
+	eq([g2.shield, g2.dose - before2], [1, 16])
 	done()
 
 
@@ -738,32 +774,32 @@ func test_radiation_carries_over_and_never_goes_down() -> void:
 		play_careful(g, 1)
 		check(g.dose >= last, "radiation went down")
 		last = g.dose
-	eq(last, 40)
+	eq(last, 35)  # an M-class storm (10) and an X-class storm (25)
 	g.next_level()
-	eq([g.level, g.dose], [4, 40])
+	eq([g.level, g.dose], [4, 35])
 	done()
 
 
 func test_radiation_at_100_loses_and_retry_restores_the_dose() -> void:
 	var g := at_level(3)
-	play_careful(g, 14)  # 40
+	play_careful(g, 14)  # 35
 	g.next_level()
-	var result := play_careful(g, 4)  # 60, 80, 100 on turns 2, 3, 4
+	var result := play_careful(g, 4)  # 60, 85, 110 on turns 2, 3, 4
 	eq(result, {"status": "lost", "reason": "dose"})
 	var d := g.get_debrief(result)
 	eq([d["tip_key"], d["storm_turns"]], ["lost_dose", [2, 3, 4]])
 	g.retry_level()
-	eq([g.level, g.turn, g.dose], [4, 1, 40])
+	eq([g.level, g.turn, g.dose], [4, 1, 35])
 	done()
 
 
 func test_high_radiation_tip_above_60() -> void:
 	var g := at_level(4)  # sheltered through Level 3: 3.0
-	play_careful(g, 4)  # + 20 on turns 2, 3 and 4
-	eq(g.dose, 63)
+	play_careful(g, 4)  # + 25 on turns 2, 3 and 4
+	eq(g.dose, 78)
 	eq(g.get_debrief({"status": "level_won"})["tip_key"], "high_dose")
 	var calm := at_level(4)
-	play_careful(calm, 3)  # 43
+	play_careful(calm, 3)  # 53
 	eq(calm.get_debrief({"status": "level_won"})["tip_key"], "default")
 	done()
 
@@ -778,7 +814,7 @@ func test_debrief_storm_cards() -> void:
 	var card: Dictionary = cards[4]
 	eq(card.keys(), ["turn", "full_class", "date", "link", "followed", "sheltered", "dose", "causes"])
 	eq([card["full_class"], card["date"], card["followed"], card["sheltered"], card["dose"]],
-		["X8.7", "2024-05-14", true, false, 20])
+		["X8.7", "2024-05-14", true, false, 25])
 	check(str(card["link"]).begins_with("https://ccmc.gsfc.nasa.gov/DONKI/view/FLR/"), "a DONKI link")
 	# In this turn the X8.7 shown did not bring the storm: another flare did.
 	check(card["causes"].size() >= 1, "the storm has a cause")
@@ -1020,20 +1056,21 @@ func _play_policy(pol: Dictionary) -> Dictionary:
 
 
 func test_parity_with_the_balance_simulator() -> void:
-	# From `python3 tools/balance_sim.py --preset tuned_food --food` (HANDOVER.md section 9.2).
+	# From `python3 tools/balance_sim.py --preset tuned_class --food` (HANDOVER.md section 9.2),
+	# printed on 2026-11-15 after the team made storm strength depend on the flare letter.
 	# NEVER change a number here to make the test pass: find the bug in the rules instead.
 	var table := [
 		# strategy, result, stars, dose, shield
 		["all science, never charge", "lost L1 (air)", 49, 0.0, null],
 		["bank Air by day, never charge", "lost L1 (air)", 49, 0.0, null],
-		["never shelter, no shield", "lost L4 (dose)", 107, 100.0, null],
+		["never shelter, no shield", "lost L4 (dose)", 107, 110.0, null],
 		["always shelter, no shield", "won", 108, 9.0, 0],
-		["full shield early, never shelter", "won", 104, 30.0, 3],
-		["shelter on X, 1 shield", "won", 107, 20.5, 1],
-		["shelter on X, 2 shields", "won", 99, 16.5, 2],
+		["full shield early, never shelter", "won", 104, 33.0, 3],
+		["shelter on X, 1 shield", "won", 107, 14.5, 1],
+		["shelter on X, 2 shields", "won", 99, 12.5, 2],
 		["never use the greenhouse", "lost L2 (food)", 60, 0.0, null],
-		["greenhouse only at night", "won", 49, 20.5, 1],
-		["greenhouse always on", "won", 30, 20.5, 1],
+		["greenhouse only at night", "won", 49, 14.5, 1],
+		["greenhouse always on", "won", 30, 14.5, 1],
 	]
 	var policies := _strategies(Numbers.DEFAULTS)
 	eq(policies.size(), table.size(), "the strategy list is the simulator's")
@@ -1122,7 +1159,7 @@ func test_the_short_game_storms_follow_the_real_record() -> void:
 		if had_alert:
 			gains[t] = g.dose - before
 	# 23 January 2024: an M5.1 flare, no storm. 29 January: an M6.8 flare, and a storm.
-	eq(gains, {2: 0.0, 5: 20.0})
+	eq(gains, {2: 0.0, 5: 10.0})
 	var d := g.get_debrief()
 	eq(d["storm_turns"], [5])
 	var saved: Array = StormsData.DATA["windows"]["space_weather"][0]["moon_dose"]
@@ -1368,6 +1405,19 @@ func test_numbers_written_in_the_words_match_the_numbers() -> void:
 	# the short game's first level says its own numbers
 	_says(t["levels_short"][0]["intro"], n["SOLAR_POWER"])
 	_says(t["levels_short"][0]["intro"], Numbers.SHORT["DAY_TURNS"])
+	# the storm strengths on the Science page are the game's, and its example is in the saved data
+	var strength: Dictionary = Facts.row("storm_strength")
+	_says(strength["game"], n["DOSE_BY_CLASS"]["X"][0])
+	_says(strength["game"], n["DOSE_BY_CLASS"]["M"][0])
+	var january: Dictionary = StormsData.DATA["windows"]["space_weather"][0]
+	var example := {}
+	for record in january["turns"]:
+		if bool(record["followed"]):
+			example[str(record["shown"]["full_class"])] = float(january["moon_dose"][int(record["turn"]) - 1])
+	eq(example.keys(), ["M6.8", "X3.3"])
+	check(absf(example["M6.8"] - example["X3.3"]) < 0.05 * example["X3.3"], "the two storms measured about the same")
+	_says(strength["real"], "M6.8")
+	_says(strength["real"], "X3.3")
 	# the storm odds on the Science page are the saved counts
 	var odds: String = t["science"]["rows"][1]["real"]
 	var chance: Dictionary = StormsData.DATA["chance"]

@@ -15,6 +15,12 @@
 > `stars` still counts only science power, mission rewards go to a separate `bonus`, and the parity
 > table is tested as before. The new numbers are in `game_numbers.gd` (`SHORT`, `LEVELS_SHORT`,
 > `MISSIONS`, and each level's `science_goal` and `missions_goal`).
+>
+> **Rule change, 2026-11-15 (team decision).** Storm strength now depends on the flare letter the alert
+> shows: an M-class storm adds 10 / 7 / 5 / 3 Radiation at shield levels 0 to 3, an X-class storm
+> 25 / 16 / 11 / 6. This replaces `DOSE_BY_SHIELD: [20, 13, 9, 5]` wherever sections 4 and 9 mention it.
+> The simulator has the rule as the preset `tuned_class` (`DOSE_BY_CLASS`); `tuned_food` still prints the
+> old table. The game's numbers are now `tuned_class`, and the table in section 9.2 is what it prints.
 
 You are building **Lunar Night Shift**, a browser game for kids aged 7 to 12, for the NASA Space Apps 2026 hackathon. This file is your complete brief. It replaces the two planning PDFs, which aren't in the repo. Read all of it before you write code.
 
@@ -52,7 +58,7 @@ What the challenge page says makes a solution stand out (design for these):
 | `tools/donki_alerts_2024.json` | 136 real 2024 flare alerts from DONKI, with links and whether a particle storm followed | Input for the build script (offline mode) |
 | `HANDOVER.md` | This file | Update section 12 when you verify things |
 
-Run the simulator with `python3 tools/balance_sim.py --preset tuned_food --food`.
+Run the simulator with `python3 tools/balance_sim.py --preset tuned_class --food`.
 
 ---
 
@@ -71,7 +77,7 @@ Run the simulator with `python3 tools/balance_sim.py --preset tuned_food --food`
 | D8 | After a loss, the player **retries the same level** with the values it started with. |
 | D9 | **Food via a greenhouse switch**, plus a "Green Thumb" level before the storm levels. |
 | D10 | **Water is a calm meter.** The recycler is tied to life support, and water should rarely end a game. |
-| D11 | Numbers = the simulator's `tuned_food` preset (section 4.10). |
+| D11 | Numbers = the simulator's `tuned_class` preset (section 4.10): `tuned_food` plus storm strength by flare letter. |
 | D12 | Storm odds come from **real archive rates** (section 5.5), shown as dots out of 10, never as percentages. |
 
 ### 3.2 Still open: ask a human, don't decide
@@ -119,7 +125,7 @@ Also on screen: **Stars** (score, carries over), **Shield level 0 to 3** (carrie
 | Control | Cost | Gain | Rules |
 |---|---|---|---|
 | Life support (0 to 5) | 1 power per point | 3 holds Air steady. Each point above 3 adds 8 Air (up to 60). | Below 3 drains Air 8 per missing point **and** stops the water recycler. |
-| Shield (+/-) | 8 power per shield level, can be spread over turns | Every later storm does less: 20 / 13 / 9 / 5 at levels 0 / 1 / 2 / 3 | Max level 3. Permanent; carries over. |
+| Shield (+/-) | 8 power per shield level, can be spread over turns | Every later storm does less: an M-class storm 10 / 7 / 5 / 3 and an X-class storm 25 / 16 / 11 / 6 at levels 0 / 1 / 2 / 3 | Max level 3. Permanent; carries over. |
 | Science (+/-) | 1 power | 1 star | Nothing for survival. Not allowed while sheltering. |
 | Charge battery (+/-) | 1 power puts 0.8 into the battery | Power for the night | **Day only.** Capped at 40. |
 | Greenhouse (switch) | 1 power by day, **4 at night** (grow lights) | +3 food, plants drink +1 water | Levels 2 to 4 only. |
@@ -135,7 +141,7 @@ Budget math for a careful player, so you can sanity-check: the day gives 7 × 10
 | | A storm really followed | False alarm |
 |---|---|---|
 | Shelter | Radiation +1.5. Paid 1 power and the turn's science. | No radiation. Paid for nothing. |
-| Stay | Radiation +20 / 13 / 9 / 5 by shield level (shield **after** this turn's building) | No radiation. Kept the science. |
+| Stay | Radiation by shield level (shield **after** this turn's building): M-class +10 / 7 / 5 / 3, X-class +25 / 16 / 11 / 6 | No radiation. Kept the science. |
 
 - **No peeking:** `followed` lives only inside `game.js`. `alertForTurn()` and `getState()` must never expose it, or anything derived from it, before the turn is played. The debrief may show it for turns already played.
 
@@ -155,7 +161,7 @@ Budget math for a careful player, so you can sanity-check: the day gives 7 × 10
 5. If not sheltering: `stars += science`.
 6. If day: `battery = min(40, battery + charge × 0.8)`.
 7. If the level has food: if greenhouse, `food += 3` and `water −= 1`. Then `food −= 2`. Then `water −= (lifeSupport ≥ 3 ? 1 : 2)`.
-8. `resolveStorm(shelter)`: if this turn has a storm and it followed, `dose += shelter ? 1.5 : DOSE_BY_SHIELD[shield]`. Log it for the debrief.
+8. `resolveStorm(shelter)`: if this turn has a storm and it followed, `dose += shelter ? 1.5 : DOSE_BY_CLASS[letter the alert shows][shield]`. Log it for the debrief.
 9. Push `{turn, battery, air, water, food, dose, plan}` to history.
 10. Lose checks **in this order**: air ≤ 0 → `lost/air`; dose ≥ 100 → `lost/dose`; food < 0 → `lost/food`; water < 0 → `lost/water`.
 11. If turn == 14: return `level_won`, or `game_won` on Level 4.
@@ -189,7 +195,7 @@ TURNS_PER_LEVEL: 14,  DAY_TURNS: 7,      SOLAR_POWER: 10,
 START_BATTERY: 10,    BATTERY_MAX: 40,   CHARGE_EFFICIENCY: 0.8,
 START_AIR: 60,        AIR_MAX: 60,       LS_NEEDED: 3,  LS_MAX: 5,  AIR_PER_POWER: 8,
 SHIELD_COST: 8,       MAX_SHIELD: 3,     SHELTER_COST: 1,
-DOSE_LIMIT: 100,      SHELTER_DOSE: 1.5, DOSE_BY_SHIELD: [20, 13, 9, 5],
+DOSE_LIMIT: 100,      SHELTER_DOSE: 1.5, DOSE_BY_CLASS: {M: [10, 7, 5, 3], X: [25, 16, 11, 6]},
 FOOD_START: 16,       FOOD_EATEN: 2,     FOOD_PER_GREENHOUSE: 3,
 GREENHOUSE_DAY: 1,    GREENHOUSE_NIGHT: 4,
 WATER_START: 30,      WATER_USED: 1,     WATER_USED_NO_RECYCLER: 2,  GREENHOUSE_WATER: 1,
@@ -546,14 +552,14 @@ Port `Policy` and the strategy list from `tools/balance_sim.py` (`strategies(p, 
 |---|---|---|---|---|
 | all science, never charge | lost L1 (air) | 49 | 0 | – |
 | bank Air by day, never charge | lost L1 (air) | 49 | 0 | – |
-| never shelter, no shield | lost L4 (dose) | 107 | 100.0 | – |
+| never shelter, no shield | lost L4 (dose) | 107 | 110.0 | – |
 | always shelter, no shield | won | 108 | 9.0 | 0 |
-| full shield early, never shelter | won | 104 | 30.0 | 3 |
-| shelter on X, 1 shield | won | 107 | 20.5 | 1 |
-| shelter on X, 2 shields | won | 99 | 16.5 | 2 |
+| full shield early, never shelter | won | 104 | 33.0 | 3 |
+| shelter on X, 1 shield | won | 107 | 14.5 | 1 |
+| shelter on X, 2 shields | won | 99 | 12.5 | 2 |
 | never use the greenhouse | lost L2 (food) | 60 | 0 | – |
-| greenhouse only at night | won | 49 | 20.5 | 1 |
-| greenhouse always on | won | 30 | 20.5 | 1 |
+| greenhouse only at night | won | 49 | 14.5 | 1 |
+| greenhouse always on | won | 30 | 14.5 | 1 |
 
 "Stars" for a loss = stars at the moment of the loss. If a row disagrees, find the bug by comparing turn by turn with the Python engine. **Never change numbers to make a test pass.** Note that your `checkPlan` rule 5 doesn't affect these policies, because they only shelter on alerts.
 
@@ -621,6 +627,8 @@ team the same day.** The sentences used are quoted above each row in `game_text.
   (about 30 minutes or less for the fastest) (same page).
 
 **Still to verify (your human checks these; mark them in `game_text.gd` with `TODO(verify)` and never mark one verified yourself):**
+- `storm_strength` (Science page only): "A bigger flare does not always mean a bigger radiation storm",
+  with the M6.8 and X3.3 turns of the saved Moon measurements as the example (365.25 and 363.36).
 - The August 1972 storm between Apollo 16 and 17 (not used in the game).
 - NASA Veggie and CSA food-production facts beyond "real crops take weeks to grow" (not used in the game).
 - Any other science sentence you write.
