@@ -641,6 +641,8 @@ team the same day.** The sentences used are quoted above each row in `game_text.
 
 Add `.github/workflows/pages.yml` that uploads `game/` with `actions/upload-pages-artifact` and deploys with `actions/deploy-pages`. A human must enable Pages (Settings → Pages → Source: GitHub Actions). Don't do that yourself.
 
+*Godot build, 2026-11-15:* the workflow is written and uploads `web-export/` instead, but it is kept in `tools/github-pages-workflow.yml`, not yet in `.github/workflows/`: the login used to push could not change workflow files. A human adds it on github.com. It runs by itself only in a fork; see "Host it yourself" in `README.md` for the steps.
+
 ## 14. AI-use log
 
 The challenge rules require a description of how AI tools were used. Append one line per session to `AI_USE_LOG.md`, with the date, the tool (e.g. "Claude Fable 5.2 coding agent") and what it produced or changed. Earlier work: the balance simulator, the 2024 storm extract and this handover were produced with Claude Code (Opus 5.5) on 2026-11-14.

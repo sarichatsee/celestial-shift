@@ -149,3 +149,33 @@ godot --headless --path . --export-release "Web" "web-export/Orbit 27 - Controls
 The file names are still the prototype's so the existing link keeps working.
 The export files at the repo root are an old copy of the prototype and are
 not used.
+
+### Host it yourself
+
+`web-export/` is a plain static website. Any static host can serve it as it
+is; no server code or special headers are needed. Hosts that limit files to
+25 MB will not work: the `.wasm` file is about 40 MB.
+
+To try it on your own computer:
+
+```bash
+python3 -m http.server -d web-export 8010
+```
+
+To publish it with **GitHub Pages** from your own fork, use the workflow
+kept in `tools/github-pages-workflow.yml`. It uploads `web-export/` on every
+push that changes it. Do these once on github.com, in the fork:
+
+1. On the branch `godot-lunar-night-shift`, choose **Add file → Create new
+   file**, name it `.github/workflows/pages.yml`, paste the text of
+   `tools/github-pages-workflow.yml` and commit.
+2. **Actions** tab: enable workflows.
+3. **Settings → Pages → Source:** GitHub Actions.
+4. **Settings → Environments → github-pages → Deployment branches:** allow
+   `godot-lunar-night-shift` (only the default branch is allowed at first).
+
+Then push, or run "Publish the web build" by hand from the Actions tab. The
+game appears at `https://<your-name>.github.io/<repository-name>/`.
+
+In the team's own repository the workflow stays off until someone turns
+Pages on there and adds the repository variable `DEPLOY_PAGES` = `true`.
